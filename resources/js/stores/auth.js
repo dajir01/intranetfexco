@@ -46,12 +46,15 @@ export const useAuthStore = defineStore('auth', {
     user: null,
     status: 'idle',
     error: null,
+    errorCode: null,
     hasCheckedAuth: false,
   }),
   getters: {
     isAuthenticated: state => Boolean(state.user),
     role: state => resolveRole(state.user?.area),
     can: state => ability => canUser(state.user, ability),
+    isInactiveError: state => state.errorCode === 'USER_INACTIVE',
+    isInvalidCredentialsError: state => state.errorCode === 'INVALID_CREDENTIALS',
   },
   actions: {
     setUser(user) {
@@ -60,6 +63,7 @@ export const useAuthStore = defineStore('auth', {
     async fetchUser() {
       this.status = 'checking'
       this.error = null
+      this.errorCode = null
 
       try {
         const response = await fetch('/me', {
@@ -80,6 +84,7 @@ export const useAuthStore = defineStore('auth', {
         this.user = data.user
         this.status = this.user ? 'authenticated' : 'anonymous'
         this.error = null
+        this.errorCode = null
       }
       catch (error) {
         console.error('Unable to fetch current user', error)
@@ -93,6 +98,7 @@ export const useAuthStore = defineStore('auth', {
     async login(payload) {
       this.status = 'loading'
       this.error = null
+      this.errorCode = null
 
       try {
         await refreshCsrfToken()
@@ -108,12 +114,18 @@ export const useAuthStore = defineStore('auth', {
           const errorBody = await response.json().catch(() => ({}))
 
           this.status = 'error'
+          
+          // Detectar tipo de error basado en respuesta del servidor
+          // Por ahora usamos un mensaje genérico por seguridad
           this.error = errorBody.message || 'Credenciales inválidas'
+          this.errorCode = errorBody.code || 'INVALID_CREDENTIALS'
+          
           throw new Error(this.error)
         }
 
         const data = await response.json()
         this.error = null
+        this.errorCode = null
         this.user = data.user
         this.status = 'authenticated'
         this.hasCheckedAuth = true
@@ -143,6 +155,7 @@ export const useAuthStore = defineStore('auth', {
         this.user = null
         this.status = 'anonymous'
         this.error = null
+        this.errorCode = null
         this.hasCheckedAuth = true
       }
     },

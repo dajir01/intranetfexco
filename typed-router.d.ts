@@ -20,6 +20,7 @@ declare module 'vue-router/auto-routes' {
   export interface RouteNamedMap {
     'root': RouteRecordInfo<'root', '/', Record<never, never>, Record<never, never>>,
     '$error': RouteRecordInfo<'$error', '/:error(.*)', { error: ParamValue<true> }, { error: ParamValue<false> }>,
+    'feria-list': RouteRecordInfo<'feria-list', '/feria/list', Record<never, never>, Record<never, never>>,
     'inventario-edit-id': RouteRecordInfo<'inventario-edit-id', '/inventario/edit/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
     'inventario-edit-invoice-product-edit-view': RouteRecordInfo<'inventario-edit-invoice-product-edit-view', '/inventario/edit/InvoiceProductEditView', Record<never, never>, Record<never, never>>,
     'inventario-ingreso': RouteRecordInfo<'inventario-ingreso', '/inventario/ingreso', Record<never, never>, Record<never, never>>,
@@ -40,5 +41,9 @@ declare module 'vue-router/auto-routes' {
     'producto-lista': RouteRecordInfo<'producto-lista', '/producto/lista', Record<never, never>, Record<never, never>>,
     'producto-reporte': RouteRecordInfo<'producto-reporte', '/producto/reporte', Record<never, never>, Record<never, never>>,
     'second-page': RouteRecordInfo<'second-page', '/second-page', Record<never, never>, Record<never, never>>,
+    'usuario-id': RouteRecordInfo<'usuario-id', '/usuario/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
+    'usuario-edit-id': RouteRecordInfo<'usuario-edit-id', '/usuario/edit/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
+    'usuario-list': RouteRecordInfo<'usuario-list', '/usuario/list', Record<never, never>, Record<never, never>>,
+    'usuario-registro': RouteRecordInfo<'usuario-registro', '/usuario/registro', Record<never, never>, Record<never, never>>,
   }
 }

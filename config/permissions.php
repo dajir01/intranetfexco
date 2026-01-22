@@ -2,7 +2,8 @@
 
 return [
     'role_groups' => [
-        'full' => ['sistemas', 'administracion', 'gerencia'],
+        'admin' => ['sistemas', 'administracion'],
+        'full' => ['gerencia'],
         'almacen' => ['almacen'],
         'auditoria' => ['auditoria'],
     ],
@@ -10,32 +11,37 @@ return [
     // Mapa de habilidades -> grupos de rol permitidos. Los roles no listados no tienen acceso.
     'abilities' => [
         // Productos
-        'products.view' => ['full', 'almacen', 'auditoria'],
-        'products.create' => ['full'],
-        'products.update' => ['full'],
-        'products.baja' => ['full'],
+        'products.view' => ['admin', 'full', 'almacen', 'auditoria'],
+        'products.create' => ['admin', 'full'],
+        'products.update' => ['admin', 'full'],
+        'products.baja' => ['admin', 'full'],
 
         // Asignaciones de producto
-        'assignments.upsert' => ['full', 'almacen'],
-        'assignments.delete' => ['full'],
+        'assignments.upsert' => ['admin', 'full', 'almacen'],
+        'assignments.delete' => ['admin', 'full'],
 
         // Áreas y catálogos
-        'areas.view' => ['full', 'almacen', 'auditoria'],
-        'providers.view' => ['full', 'almacen'],
-        'providers.create' => ['full', 'almacen'],
+        'areas.view' => ['admin', 'full', 'almacen', 'auditoria'],
+        'providers.view' => ['admin', 'full', 'almacen'],
+        'providers.create' => ['admin', 'full', 'almacen'],
 
         // Ingresos
-        'ingresos.view' => ['full', 'almacen', 'auditoria'],
-        'ingresos.create' => ['full', 'almacen'],
-        'ingresos.update' => ['full'],
-        'ingresos.cancel' => ['full'],
+        'ingresos.view' => ['admin', 'full', 'almacen', 'auditoria'],
+        'ingresos.create' => ['admin', 'full', 'almacen'],
+        'ingresos.update' => ['admin', 'full'],
+        'ingresos.cancel' => ['admin', 'full'],
 
         // Movimientos (salidas/ingresos de almacén)
-        'movimientos.view' => ['full', 'almacen', 'auditoria'],
-        'movimientos.create' => ['full', 'almacen'],
+        'movimientos.view' => ['admin', 'full', 'almacen', 'auditoria'],
+        'movimientos.create' => ['admin', 'full', 'almacen'],
 
         // Reportes y PDFs
-        'reports.view' => ['full', 'almacen', 'auditoria'],
-        'reports.download' => ['full', 'almacen', 'auditoria'],
+        'reports.view' => ['admin', 'full', 'almacen', 'auditoria'],
+        'reports.download' => ['admin', 'full', 'almacen', 'auditoria'],
+
+        // Usuarios (solo Sistemas y Administración)
+        'users.view' => ['admin'],
+        'users.create' => ['admin'],
+        'users.update' => ['admin'],
     ],
 ];

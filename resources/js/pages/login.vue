@@ -34,6 +34,15 @@ const isPasswordVisible = ref(false)
 const authThemeImg = useGenerateImageVariant(authV2LoginIllustrationLight, authV2LoginIllustrationDark, authV2LoginIllustrationBorderedLight, authV2LoginIllustrationBorderedDark, true)
 const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
 const authError = computed(() => authStore.error)
+const isInactiveUserError = computed(() => authStore.isInactiveError)
+
+const getErrorMessage = () => {
+  if (!authStore.error)
+    return null
+
+  // Mostrar mensaje genérico por seguridad
+  return authStore.error
+}
 
 const submit = async () => {
   if (isSubmitting.value)
@@ -120,12 +129,16 @@ const submit = async () => {
         </VCardText>
         <VCardText>
           <VAlert
-            v-if="authError"
+            v-if="getErrorMessage()"
             type="error"
             density="compact"
             class="mb-4"
+            closable
+            @click:close="authStore.error = null"
           >
-            {{ authError }}
+            <div class="d-flex align-center gap-2">
+              <span>{{ getErrorMessage() }}</span>
+            </div>
           </VAlert>
           <VForm @submit.prevent="submit">
             <VRow>
@@ -161,7 +174,7 @@ const submit = async () => {
                   :loading="isSubmitting"
                   :disabled="isSubmitting"
                 >
-                  Login
+                  Ingresar
                 </VBtn>
               </VCol>
             </VRow>

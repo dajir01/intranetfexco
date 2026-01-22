@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->post('/login', [AuthController::class, 'login']);
@@ -71,6 +72,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventario/reporte/tipos-producto', [InventarioController::class, 'getTiposProducto'])->middleware('ability:reports.view');
     Route::get('/inventario/reporte/productos-lista', [InventarioController::class, 'getProductosParaReporte'])->middleware('ability:reports.view');
     Route::get('/inventario/reporte/productos/pdf', [InventarioController::class, 'reporteProductosPDF'])->middleware('ability:reports.download');
+
+    // Usuario API
+    Route::get('/usuarios', [UsuarioController::class, 'usuarios'])->middleware('ability:users.view');
+    Route::post('/usuarios', [UsuarioController::class, 'store'])->middleware('ability:users.create');
+    Route::get('/usuarios/{id}', [UsuarioController::class, 'show'])->middleware('ability:users.view');
+    Route::patch('/usuarios/{id}', [UsuarioController::class, 'update'])->middleware('ability:users.update');
+    Route::patch('/usuarios/{id}/estado', [UsuarioController::class, 'toggleEstado'])->middleware('ability:users.update');
 });
 
 Route::get('{any?}', function () {

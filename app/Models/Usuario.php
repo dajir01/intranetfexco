@@ -14,8 +14,8 @@ class Usuario extends Authenticatable
 
     protected $table = 'usuarios';
     protected $primaryKey = 'id_usuario';
-    public $incrementing = false;
-    protected $keyType = 'string';
+    public $incrementing = true;
+    protected $keyType = 'int';
     public $timestamps = false;
 
     protected $fillable = [
@@ -27,6 +27,7 @@ class Usuario extends Authenticatable
         'jefatura',
         'email',
         'creado_por',
+        'estado',
     ];
 
     protected $hidden = [
@@ -46,14 +47,32 @@ class Usuario extends Authenticatable
 
     public function setPassUsuarioAttribute($value)
     {
-        if (empty($value)) {
-            $this->attributes['pass_usuario'] = $value;
+        // Guardar la contraseña tal como se recibe (texto plano o hash ya generado)
+        $this->attributes['pass_usuario'] = $value ?? '';
+    }
 
-            return;
+    /**
+     * Verifica si el usuario está activo.
+     * Un usuario está activo si:
+     * - Tiene estado = 1, O
+     * - El campo estado es null (compatibilidad hacia atrás)
+     */
+    public function isActive(): bool
+    {
+        // Si no hay estado definido, considerar activo (compatibilidad)
+        if ($this->estado === null) {
+            return true;
         }
 
-        $this->attributes['pass_usuario'] = Str::startsWith($value, '$2y$')
-            ? $value
-            : Hash::make($value);
+        return (int)$this->estado === 1;
+    }
+
+    /**
+     * Verifica si el usuario está inactivo.
+     */
+    public function isInactive(): bool
+    {
+        return !$this->isActive();
     }
 }
+

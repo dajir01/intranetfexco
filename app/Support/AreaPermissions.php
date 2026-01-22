@@ -48,9 +48,26 @@ class AreaPermissions
             return true;
         }
 
-        $allowedRoles = config('permissions.abilities')[$ability] ?? [];
+        $abilityConfig = config('permissions.abilities')[$ability] ?? [];
 
-        return in_array($role, $allowedRoles, true);
+        // Si la configuración es una lista simple, se interpreta como roles permitidos.
+        if (array_is_list($abilityConfig)) {
+            return in_array($role, $abilityConfig, true);
+        }
+
+        // Si es un arreglo asociativo, soportamos claves 'roles' y 'areas'.
+        $allowedRoles = $abilityConfig['roles'] ?? [];
+        $allowedAreas = $abilityConfig['areas'] ?? [];
+
+        if (!empty($allowedRoles) && in_array($role, $allowedRoles, true)) {
+            return true;
+        }
+
+        if (!empty($allowedAreas) && in_array($normalizedArea = self::normalizeArea($user->area ?? ''), $allowedAreas, true)) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
