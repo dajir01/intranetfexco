@@ -43,5 +43,11 @@ return [
         'users.view' => ['admin'],
         'users.create' => ['admin'],
         'users.update' => ['admin'],
+
+        // Feria (solo Sistemas)
+        'ferias.view' => ['admin'],
+        'ferias.create' => ['admin'],
+        'ferias.update' => ['admin'],
+        'ferias.activate' => ['admin'],
     ],
 ];

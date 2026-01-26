@@ -33,6 +33,12 @@ export const ABILITIES = {
   'users.view': ['admin'],
   'users.create': ['admin'],
   'users.update': ['admin'],
+
+  // Ferias: solo Sistemas
+  'ferias.view': ['admin'],
+  'ferias.create': ['admin'],
+  'ferias.update': ['admin'],
+  'ferias.activate': ['admin'],
 }
 
 const normalizeArea = area => String(area || '').trim().toLowerCase()

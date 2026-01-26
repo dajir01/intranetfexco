@@ -1,7 +1,10 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\FeriaController;
 use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\PabellonController;
+use App\Http\Controllers\StandController;
 use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
@@ -79,6 +82,47 @@ Route::middleware('auth')->group(function () {
     Route::get('/usuarios/{id}', [UsuarioController::class, 'show'])->middleware('ability:users.view');
     Route::patch('/usuarios/{id}', [UsuarioController::class, 'update'])->middleware('ability:users.update');
     Route::patch('/usuarios/{id}/estado', [UsuarioController::class, 'toggleEstado'])->middleware('ability:users.update');
+
+    // Feria API
+    Route::middleware('ability:ferias.view')->group(function () {
+        Route::get('/ferias', [FeriaController::class, 'index']);
+        Route::get('/ferias/{id}', [FeriaController::class, 'show'])->whereNumber('id');
+    });
+    Route::middleware('ability:ferias.create')->post('/ferias', [FeriaController::class, 'store']);
+    Route::middleware('ability:ferias.update')->group(function () {
+        Route::patch('/ferias/{id}', [FeriaController::class, 'update'])->whereNumber('id');
+        Route::patch('/ferias/{id}/activate', [FeriaController::class, 'activate'])->whereNumber('id');
+        Route::patch('/ferias/{id}/deactivate', [FeriaController::class, 'deactivate'])->whereNumber('id');
+    });
+
+    // Pabellon API
+    Route::middleware('ability:ferias.view')->group(function () {
+        Route::get('/ferias/{feriaId}/pabellones', [PabellonController::class, 'index'])->whereNumber('feriaId');
+        Route::get('/ferias/{feriaId}/pabellones/{id}', [PabellonController::class, 'show'])->whereNumber(['feriaId', 'id']);
+    });
+    Route::middleware('ability:ferias.create')->post('/ferias/{feriaId}/pabellones', [PabellonController::class, 'store'])->whereNumber('feriaId');
+    Route::middleware('ability:ferias.update')->group(function () {
+        Route::post('/ferias/{feriaId}/pabellones/{id}', [PabellonController::class, 'update'])->whereNumber(['feriaId', 'id']);
+        Route::delete('/ferias/{feriaId}/pabellones/{id}', [PabellonController::class, 'destroy'])->whereNumber(['feriaId', 'id']);
+    });
+
+    // Stand API
+    Route::middleware('ability:ferias.view')->group(function () {
+        Route::get('/pabellones/{pabellonId}/stands', [StandController::class, 'index'])->whereNumber('pabellonId');
+    });
+    Route::middleware('ability:ferias.create')->post('/pabellones/{pabellonId}/stands', [StandController::class, 'store'])->whereNumber('pabellonId');
+    Route::middleware('ability:ferias.update')->patch('/pabellones/{pabellonId}/stands/{id}', [StandController::class, 'update'])->whereNumber(['pabellonId', 'id']);
+    Route::middleware('ability:ferias.update')->delete('/pabellones/{pabellonId}/stands/{id}', [StandController::class, 'destroy'])->whereNumber(['pabellonId', 'id']);
+
+    // Límites de Credenciales API
+    Route::middleware('ability:ferias.view')->group(function () {
+        Route::get('/pabellones/{pabellonId}/limites-credenciales', [StandController::class, 'obtenerLimitesCredenciales'])->whereNumber('pabellonId');
+    });
+    Route::middleware('ability:ferias.create')->post('/pabellones/{pabellonId}/limites-credenciales', [StandController::class, 'guardarLimitesCredencialesMultiples'])->whereNumber('pabellonId');
+    Route::middleware('ability:ferias.update')->group(function () {
+        Route::delete('/pabellones/{pabellonId}/limites-credenciales/{id}', [StandController::class, 'eliminarLimiteCredencial'])->whereNumber(['pabellonId', 'id']);
+        Route::post('/pabellones/{pabellonId}/limites-credenciales/eliminar', [StandController::class, 'eliminarLimiteCredencialPorCampos'])->whereNumber('pabellonId');
+    });
 });
 
 Route::get('{any?}', function () {
