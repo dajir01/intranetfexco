@@ -1,0 +1,16 @@
+import inventario from './inventario'
+import producto from './producto'
+import usuario from './usuario'
+import feria from './feria'
+import Contrato from './contrato'
+import Noticia from './noticia'
+import Biometrico from './biometrico'
+import Controlventas from './controlventas'
+import Empresa from './empresa'
+import Presupuesto from './presupuesto'
+import Solicitudes from './solicitudes'
+import Correspondencia from './correspondencia'
+import Configuracion from './configuracion'
+import Credenciales from './credenciales'
+
+export default [ ...feria, ...Contrato, ...Empresa, ...Credenciales, ...inventario, ...producto, ...Controlventas, ...Noticia, ...Biometrico, ...Presupuesto, ...Solicitudes, ...Correspondencia, ...usuario, ...Configuracion]

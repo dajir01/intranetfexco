@@ -1,0 +1,8 @@
+// Write your overrides
+
+/* Tamaño del logo importado como URL (aplica en header y login) */
+.app-logo-img {
+	height: 28px; /* ajusta aquí el alto deseado */
+	width: auto;  /* mantiene la proporción del SVG */
+	display: block;
+}

@@ -1,0 +1,60 @@
+@use "@layouts/styles/mixins" as layoutsMixins;
+
+// 👉 Dialog
+body .v-dialog {
+  > .v-overlay__content {
+    max-inline-size: calc(100vw - 2rem);
+
+    > .v-card {
+      overflow: hidden;
+      border-radius: 1rem;
+
+      > .v-card-title {
+        background: linear-gradient(135deg, rgba(var(--v-theme-primary), 0.1), rgba(var(--v-theme-info), 0.08));
+        padding-block: 1rem;
+      }
+
+      > .v-card-text {
+        padding-block: 1.25rem;
+      }
+
+      > .v-card-actions {
+        border-block-start: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+        padding-block: 1rem;
+      }
+    }
+  }
+
+  // dialog custom close btn
+  .v-dialog-close-btn {
+    border-radius: 0.375rem;
+    background-color: rgb(var(--v-theme-surface)) !important;
+    block-size: 2rem;
+    inline-size: 2rem;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    transform: translate(0.5rem, -0.5rem);
+
+    @include layoutsMixins.rtl {
+      transform: translate(-0.5rem, -0.5rem);
+    }
+
+    &:hover {
+      transform: translate(0.3125rem, -0.3125rem);
+
+      @include layoutsMixins.rtl {
+        transform: translate(-0.3125rem, -0.3125rem);
+      }
+    }
+  }
+
+  @media (max-width: 599px) {
+    > .v-overlay__content {
+      max-inline-size: calc(100vw - 1rem);
+
+      > .v-card {
+        border-radius: 0.75rem;
+      }
+    }
+  }
+}
