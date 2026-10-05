@@ -37,6 +37,8 @@ const LEGACY_TO_GRANULAR = {
   'contratos.update-empresa': 'contratos.editar',
   'contratos.update-stands': 'contratos.editar',
   'pagos.view': 'pagos.ver',
+  'pagos.attachments.view': 'pagos.ver_comprobantes',
+  'pagos.receipts.view': 'pagos.ver_recibos',
   'pagos.export': 'pagos.exportar',
   'pagos.create': 'pagos.crear',
   'pagos.approve': 'pagos.aprobar',

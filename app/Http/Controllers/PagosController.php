@@ -612,12 +612,12 @@ class PagosController extends Controller
 
     /**
      * Descargar recibo de pago en PDF (FPDF)
-     * Requiere: pagos.view ability
+     * Requiere: pagos.receipts.view ability
      */
     public function recibo(Request $request, $id)
     {
-        if (! \App\Support\AreaPermissions::allows($request->user(), 'pagos.view')) {
-            throw new \Symfony\Component\HttpKernel\Exception\HttpException(403, 'No autorizado para ver pagos');
+        if (! \App\Support\AreaPermissions::allows($request->user(), 'pagos.receipts.view')) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(403, 'No autorizado para ver recibos');
         }
 
         require_once app_path('Support/fpdf_helper.php');
@@ -1195,4 +1195,3 @@ class PagosController extends Controller
         }
     }
 }
-

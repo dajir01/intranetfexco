@@ -323,14 +323,18 @@ Route::middleware('auth')->group(function () {
         Route::delete('/reservas/{id}', [ContratoController::class, 'eliminarReserva'])->whereNumber('id');
     });
 
-    // Pagos API - Protegidas con autenticación y roles específicos para Pagos
-    // Vista y exportación: Auditoría, Sistemas, Administración, Comercial
+    // Pagos API: cada operación se autoriza con su permiso granular.
     Route::middleware('ability:pagos.view')->group(function () {
         Route::get('/pagos/ferias', [PagosController::class, 'getFerias']);
         Route::get('/pagos/ferias/{idFeria}', [PagosController::class, 'getPagosbyFeria'])->whereNumber('idFeria');
-        Route::get('/pagos/{id}/archivo', [PagosController::class, 'archivo'])->whereNumber('id');
-        Route::get('/pagos/{id}/recibo', [PagosController::class, 'recibo'])->whereNumber('id');
     });
+
+    Route::middleware('ability:pagos.attachments.view')
+        ->get('/pagos/{id}/archivo', [PagosController::class, 'archivo'])
+        ->whereNumber('id');
+    Route::middleware('ability:pagos.receipts.view')
+        ->get('/pagos/{id}/recibo', [PagosController::class, 'recibo'])
+        ->whereNumber('id');
 
     Route::middleware('ability:pagos.export')->group(function () {
         Route::get('/pagos/exportar/{idFeria}', [PagosController::class, 'exportar'])->whereNumber('idFeria');

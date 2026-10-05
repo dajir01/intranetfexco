@@ -281,7 +281,7 @@ const getPagoExtension = pago => {
   return extension
 }
 
-const getPagoArchivoUrl = pago => `/img/pagos/${pago.id}.${getPagoExtension(pago)}`
+const getPagoArchivoUrl = pago => `/pagos/${pago.id}/archivo`
 
 const esImagenExtension = extension => {
   const ext = String(extension || '').toLowerCase()
@@ -670,6 +670,7 @@ watch(
             />
           </div>
           <VBtn
+            v-if="auth.can('pagos.export')"
             color="primary"
             variant="flat"
             prepend-icon="tabler-download"
@@ -822,7 +823,7 @@ watch(
 
           <template #item.actions="{ item }">
             <VBtn
-              v-if="item.saldo > 0"
+              v-if="item.saldo > 0 && auth.can('pagos.create')"
               color="primary"
               size="small"
               variant="flat"
@@ -880,7 +881,7 @@ watch(
             <br>* Tipo de pago: {{ getTipoPagoLabel(pagoAprobadoSeleccionado?.tipo_pago) }}
           </p>
 
-          <div v-if="pagoAprobadoSeleccionado?.tipo_pago === 0 || pagoAprobadoSeleccionado?.tipo_pago === 2">
+          <div v-if="auth.can('pagos.attachments.view') && (pagoAprobadoSeleccionado?.tipo_pago === 0 || pagoAprobadoSeleccionado?.tipo_pago === 2)">
             <div v-if="esImagenExtension(getPagoExtension(pagoAprobadoSeleccionado))">
               <img
                 :src="getPagoArchivoUrl(pagoAprobadoSeleccionado)"
@@ -898,6 +899,12 @@ watch(
               </VBtn>
             </div>
           </div>
+          <p
+            v-else-if="pagoAprobadoSeleccionado?.tipo_pago !== 1"
+            class="text-medium-emphasis"
+          >
+            No tienes permiso para ver el comprobante.
+          </p>
 
           <div v-else-if="pagoAprobadoSeleccionado?.tipo_pago === 1">
             Pago realizado en efectivo
@@ -909,7 +916,7 @@ watch(
         <VCardActions class="pago-dialog-actions pa-5 d-flex justify-end gap-2">
           <VSpacer />
           <VBtn
-            v-if="pagoAprobadoSeleccionado?.tiene_recibo"
+            v-if="pagoAprobadoSeleccionado?.tiene_recibo && auth.can('pagos.receipts.view')"
             color="info"
             variant="tonal"
             prepend-icon="tabler-download"
@@ -955,7 +962,7 @@ watch(
             <br>* Tipo de pago: {{ getTipoPagoLabel(pagoSeleccionado?.tipo_pago) }}
           </p>
 
-          <div v-if="pagoSeleccionado?.tipo_pago === 0 || pagoSeleccionado?.tipo_pago === 2">
+          <div v-if="auth.can('pagos.attachments.view') && (pagoSeleccionado?.tipo_pago === 0 || pagoSeleccionado?.tipo_pago === 2)">
             <div v-if="esImagenExtension(getPagoExtension(pagoSeleccionado))">
               <img
                 :src="getPagoArchivoUrl(pagoSeleccionado)"
@@ -973,6 +980,12 @@ watch(
               </VBtn>
             </div>
           </div>
+          <p
+            v-else-if="pagoSeleccionado?.tipo_pago !== 1"
+            class="text-medium-emphasis"
+          >
+            No tienes permiso para ver el comprobante.
+          </p>
 
           <div v-else-if="pagoSeleccionado?.tipo_pago === 1">
             Pago realizado en efectivo
@@ -984,7 +997,7 @@ watch(
         <VCardActions class="pago-dialog-actions pa-5 d-flex justify-end gap-2">
           <VSpacer />
           <VBtn
-            v-if="pagoSeleccionado?.tiene_recibo"
+            v-if="pagoSeleccionado?.tiene_recibo && auth.can('pagos.receipts.view')"
             color="info"
             variant="tonal"
             prepend-icon="tabler-download"

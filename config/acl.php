@@ -67,9 +67,9 @@ return [
         ['module' => 'contratos', 'action' => 'exportar'],
 
         ['module' => 'pagos', 'action' => 'ver'],
+        ['module' => 'pagos', 'action' => 'ver_comprobantes'],
+        ['module' => 'pagos', 'action' => 'ver_recibos'],
         ['module' => 'pagos', 'action' => 'crear'],
-        ['module' => 'pagos', 'action' => 'editar'],
-        ['module' => 'pagos', 'action' => 'eliminar'],
         ['module' => 'pagos', 'action' => 'aprobar'],
         ['module' => 'pagos', 'action' => 'rechazar'],
         ['module' => 'pagos', 'action' => 'recalcular'],
@@ -241,6 +241,8 @@ return [
         'contratos.update-stands' => 'contratos.editar',
 
         'pagos.view' => 'pagos.ver',
+        'pagos.attachments.view' => 'pagos.ver_comprobantes',
+        'pagos.receipts.view' => 'pagos.ver_recibos',
         'pagos.export' => 'pagos.exportar',
         'pagos.create' => 'pagos.crear',
         'pagos.approve' => 'pagos.aprobar',

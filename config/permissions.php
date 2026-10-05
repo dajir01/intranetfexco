@@ -106,6 +106,8 @@ return [
 
         // Pagos (Auditoria, Sistemas, Administracion y Comercial)
         'pagos.view' => ['admin', 'comercial_access', 'auditoria'],
+        'pagos.attachments.view' => ['admin', 'comercial_access', 'auditoria'],
+        'pagos.receipts.view' => ['admin', 'comercial_access', 'auditoria'],
         'pagos.export' => ['admin', 'comercial_access', 'auditoria'],
         'pagos.create' => ['admin', 'comercial_access'],
         'pagos.approve' => ['admin'],
