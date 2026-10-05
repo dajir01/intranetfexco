@@ -81,24 +81,11 @@ class PermissionController extends Controller
         abort_unless($actor instanceof Usuario, 401);
 
         $actor->loadMissing('permissions:id,name');
-        $user->loadMissing('permissions:id,name');
-        $currentPermissionNames = $user->permissions->pluck('name')->all();
-        $notDelegableNew = array_values(array_filter(
-            $permissionNames,
-            fn (string $permission): bool => ! $actor->hasPermission($permission)
-                && ! in_array($permission, $currentPermissionNames, true)
-        ));
-
-        abort_if($notDelegableNew !== [], 403, 'No puede asignar permisos que no tiene asignados.');
-
-        $protectedPermissionNames = array_values(array_filter(
-            $currentPermissionNames,
-            fn (string $permission): bool => ! $actor->hasPermission($permission)
-        ));
-        $permissionNames = array_values(array_unique(array_merge(
-            array_filter($permissionNames, fn (string $permission): bool => $actor->hasPermission($permission)),
-            $protectedPermissionNames
-        )));
+        abort_unless(
+            $actor->hasPermission('usuarios.gestionar_permisos'),
+            403,
+            'No autorizado para gestionar permisos.'
+        );
 
         DB::transaction(function () use ($user, $permissionNames): void {
             $permissionIds = Permission::query()

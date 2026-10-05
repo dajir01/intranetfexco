@@ -354,7 +354,9 @@ const getCsrfToken = () => document.querySelector('meta[name="csrf-token"]')?.ge
 
 const isChecked = permissionName => selected.value.has(permissionName)
 
-const delegablePermissions = permissions => permissions.filter(permission => can(permission.name))
+const delegablePermissions = permissions => canManage.value
+  ? permissions
+  : permissions.filter(permission => can(permission.name))
 
 const isModuleSelected = permissions => permissions.length > 0 && permissions.every(permission => selected.value.has(permission.name))
 
@@ -595,7 +597,7 @@ onMounted(async () => {
                             :key="permission.name"
                             :model-value="isChecked(permission.name)"
                             :label="permissionLabel(permission)"
-                            :disabled="!can(permission.name)"
+                            :disabled="!canManage"
                             density="compact"
                             hide-details
                             @update:model-value="val => togglePermission(permission.name, val)"
