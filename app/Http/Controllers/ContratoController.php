@@ -1835,6 +1835,8 @@ class ContratoController extends Controller
     private function validarDatosObligatoriosParaGenerar(Contrato $contrato, Empresa $empresa)
     {
         $actividadPrincipal = (string) ($empresa->id_tipo_representante ?? '');
+        $email = trim((string) $empresa->email);
+
         if (preg_match('/^[1-3]00$/', $actividadPrincipal)) {
             $actividadPrincipal = substr($actividadPrincipal, 0, -2);
         }
@@ -1844,7 +1846,7 @@ class ContratoController extends Controller
             'direccion' => $empresa->direccion,
             'nit' => $empresa->nit,
             'telefono' => $empresa->telefono,
-            'email' => $empresa->email,
+            'email' => $email !== '' ? $email : null,
             'pais_id' => $empresa->pais,
             'ciudad_id' => $empresa->ciudad,
             'cluster' => $empresa->cluster,
