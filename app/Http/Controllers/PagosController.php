@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Storage;
 
 class PagosController extends Controller
 {
+    private const RECIBOS_DESDE_ID_FERIA = 21;
+
     /**
      * Obtener todas las ferias activas
      */
@@ -108,7 +110,8 @@ class PagosController extends Controller
             // Procesar datos: agrupar por empresa y calcular totales
             $empresasAgrupadas = $contratos->groupBy('id_empresa');
 
-            $empresasProcesadas = $empresasAgrupadas->map(function ($contratosEmpresa, $idEmpresa) use ($todosPagos, $feria) {
+            $recibosHabilitados = (int) $feria->id_feria >= self::RECIBOS_DESDE_ID_FERIA;
+            $empresasProcesadas = $empresasAgrupadas->map(function ($contratosEmpresa, $idEmpresa) use ($todosPagos, $feria, $recibosHabilitados) {
                 // Información de la empresa
                 $primerContrato = $contratosEmpresa->first();
                 $empresa = $primerContrato->empresa;
@@ -157,7 +160,7 @@ class PagosController extends Controller
                 }
 
                 // Formatear pagos aprobados
-                $pagosAprobadosFormato = $pagosAprobados->map(function ($pago) {
+                $pagosAprobadosFormato = $pagosAprobados->map(function ($pago) use ($recibosHabilitados) {
                     return [
                         'id' => $pago->id,
                         'fecha' => $pago->fecha,
@@ -169,13 +172,13 @@ class PagosController extends Controller
                         'nombre_reali' => $pago->usuario ? $pago->usuario->nombre_usuario : 'N/A',
                         'aprobador' => $pago->usuarioAprobacion ? $pago->usuarioAprobacion->nombre_usuario : 'N/A',
                         'nombre_apro' => $pago->usuarioAprobacion ? $pago->usuarioAprobacion->nombre_usuario : null,
-                        'tiene_recibo' => (bool) $pago->recibo,
-                        'numero_recibo' => $pago->recibo?->numero_recibo,
+                        'tiene_recibo' => $recibosHabilitados && (bool) $pago->recibo,
+                        'numero_recibo' => $recibosHabilitados ? $pago->recibo?->numero_recibo : null,
                     ];
                 })->toArray();
 
                 // Formatear pagos pendientes
-                $pagosPendientesFormato = $pagosPendientes->map(function ($pago) {
+                $pagosPendientesFormato = $pagosPendientes->map(function ($pago) use ($recibosHabilitados) {
                     return [
                         'id' => $pago->id,
                         'fecha' => $pago->fecha,
@@ -185,8 +188,8 @@ class PagosController extends Controller
                         'extension' => $pago->extension,
                         'usuario' => $pago->usuario ? $pago->usuario->nombre_usuario : 'N/A',
                         'nombre_reali' => $pago->usuario ? $pago->usuario->nombre_usuario : 'N/A',
-                        'tiene_recibo' => (bool) $pago->recibo,
-                        'numero_recibo' => $pago->recibo?->numero_recibo,
+                        'tiene_recibo' => $recibosHabilitados && (bool) $pago->recibo,
+                        'numero_recibo' => $recibosHabilitados ? $pago->recibo?->numero_recibo : null,
                     ];
                 })->toArray();
 
@@ -254,7 +257,6 @@ class PagosController extends Controller
             'monto' => 'required|numeric|min:0',
             'tipo_pago' => 'required',
             'foto' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-            'generar_recibo' => 'nullable|boolean',
         ]);
 
         $usuarioActual = $request->user();
@@ -265,7 +267,7 @@ class PagosController extends Controller
         }
 
         $tipoPago = (int) $request->input('tipo_pago');
-        $debeGenerarRecibo = $this->debeGenerarRecibo($tipoPago, $request->boolean('generar_recibo'));
+        $debeGenerarRecibo = $this->debeGenerarRecibo((int) $request->input('id_feria'), $tipoPago);
         $reciboGenerado = null;
         $rutaFoto = null;
 
@@ -630,9 +632,15 @@ class PagosController extends Controller
             'recibo:id_recibo,id_pago,numero_recibo,anio,tipo_pago,user_id',
         ])->findOrFail($id);
 
+        abort_if(
+            (int) $pago->id_feria < self::RECIBOS_DESDE_ID_FERIA,
+            404,
+            'La emisión de recibos no está habilitada para este evento.'
+        );
+
         $recibo = $pago->recibo;
         if (!$recibo) {
-            if ((int) $pago->tipo_pago === 1) {
+            if (in_array((int) $pago->tipo_pago, [1, 2], true)) {
                 $recibo = app(ReciboNumberService::class)
                     ->generarParaPago($pago, (int) ($request->user()?->id_usuario ?? $pago->id_usuario));
             } else {
@@ -1082,20 +1090,10 @@ class PagosController extends Controller
     /**
      * Reglas de negocio para emisión de recibo al registrar pago.
      */
-    private function debeGenerarRecibo(int $tipoPago, bool $generarReciboSolicitado): bool
+    private function debeGenerarRecibo(int $idFeria, int $tipoPago): bool
     {
-        // Efectivo: siempre emite recibo.
-        if ($tipoPago === 1) {
-            return true;
-        }
-
-        // Cheque: solo emite si el usuario marcó la opción.
-        if ($tipoPago === 2) {
-            return $generarReciboSolicitado;
-        }
-
-        // Otros tipos de pago no generan recibo por defecto.
-        return false;
+        return $idFeria >= self::RECIBOS_DESDE_ID_FERIA
+            && in_array($tipoPago, [1, 2], true);
     }
 
     private function obtenerNombreTipoPago(int $tipoPago): string

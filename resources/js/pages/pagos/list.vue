@@ -44,7 +44,6 @@ const formPago = reactive({
   id_feria: null,
   monto: null,
   tipo_pago: 0,
-  generar_recibo: false,
   foto: null,
 })
 
@@ -296,6 +295,11 @@ const getTipoPagoLabel = (tipoPago) => {
   return 'No definido'
 }
 
+const reciboAutomaticoAplica = computed(() => (
+  Number(feriaSeleccionada.value) >= 21
+  && [1, 2].includes(Number(formPago.tipo_pago))
+))
+
 // Función para imprimir contrato
 const imprimirContrato = (idContrato) => {
   const url = `/contratos/${idContrato}/imprimir`
@@ -314,7 +318,6 @@ const abrirDialogPago = (empresa) => {
   formPago.id_feria = feriaSeleccionada.value
   formPago.monto = null
   formPago.tipo_pago = 0
-  formPago.generar_recibo = false
   formPago.foto = null
   dialogPago.value = true
 }
@@ -430,7 +433,6 @@ const subirPagoConfirmar = async () => {
   formData.append('id_feria', formPago.id_feria ?? '')
   formData.append('monto', formPago.monto ?? '')
   formData.append('tipo_pago', formPago.tipo_pago ?? 0)
-  formData.append('generar_recibo', formPago.generar_recibo ? '1' : '0')
   if (formPago.foto) formData.append('foto', formPago.foto)
 
   try {
@@ -554,23 +556,6 @@ const updateOptions = (options) => {
 // Estado para notificaciones
 const snackbar = ref({ show: false, color: 'info', text: '' })
 
-watch(
-  () => formPago.tipo_pago,
-  (tipoPago) => {
-    if (tipoPago === 1) {
-      formPago.generar_recibo = true
-      return
-    }
-
-    if (tipoPago === 2) {
-      formPago.generar_recibo = false
-      return
-    }
-
-    formPago.generar_recibo = false
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
@@ -916,7 +901,7 @@ watch(
         <VCardActions class="pago-dialog-actions pa-5 d-flex justify-end gap-2">
           <VSpacer />
           <VBtn
-            v-if="pagoAprobadoSeleccionado?.tiene_recibo && auth.can('pagos.receipts.view')"
+            v-if="Number(feriaSeleccionada) >= 21 && pagoAprobadoSeleccionado?.tiene_recibo && auth.can('pagos.receipts.view')"
             color="info"
             variant="tonal"
             prepend-icon="tabler-download"
@@ -997,7 +982,7 @@ watch(
         <VCardActions class="pago-dialog-actions pa-5 d-flex justify-end gap-2">
           <VSpacer />
           <VBtn
-            v-if="pagoSeleccionado?.tiene_recibo && auth.can('pagos.receipts.view')"
+            v-if="Number(feriaSeleccionada) >= 21 && pagoSeleccionado?.tiene_recibo && auth.can('pagos.receipts.view')"
             color="info"
             variant="tonal"
             prepend-icon="tabler-download"
@@ -1085,18 +1070,10 @@ watch(
             </VRow>
 
             <VRow>
-              <VCol cols="12">
-                <VCheckbox
-                  v-model="formPago.generar_recibo"
-                  label="Generar recibo"
-                  :disabled="formPago.tipo_pago === 1 || formPago.tipo_pago === 0"
-                  :hint="formPago.tipo_pago === 1
-                    ? 'Para efectivo se genera automáticamente.'
-                    : formPago.tipo_pago === 2
-                      ? 'Para cheque, marca esta opción si deseas emitir recibo.'
-                      : 'Para depósito no se genera recibo.'"
-                  persistent-hint
-                />
+              <VCol v-if="reciboAutomaticoAplica" cols="12">
+                <VAlert type="info" variant="tonal" class="mb-0">
+                  Se generará un recibo automáticamente al registrar este pago.
+                </VAlert>
               </VCol>
 
               <!-- Foto (requerida si es Depósito o Cheque, oculta si es Efectivo) -->
