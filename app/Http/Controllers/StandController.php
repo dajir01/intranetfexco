@@ -184,22 +184,25 @@ class StandController extends Controller
         }
 
         try {
-            $pabellon = Pabellon::findOrFail($pabellonId);
-            $feriaId = $pabellon->feria;
-
             DB::beginTransaction();
 
-            // Paso 1: Contar stands existentes para generar numeración correlativa
-            $maxNumeroStand = Stand::where('id_pabellon', $pabellonId)
+            $pabellon = Pabellon::query()
+                ->whereKey($pabellonId)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $feriaId = $pabellon->feria;
+
+            $cantidadStandsExistentes = Stand::where('id_pabellon', $pabellonId)
                 ->where('feria', $feriaId)
-                ->max('numero_stand') ?? 0;
+                ->lockForUpdate()
+                ->count();
 
             $standsCreados = [];
             $cantidad = $request->cantidad;
 
             // Paso 2: Crear los stands uno por uno
             for ($i = 1; $i <= $cantidad; $i++) {
-                $numeroStand = $maxNumeroStand + $i;
+                $numeroStand = (string) ($cantidadStandsExistentes + $i);
 
                 $stand = Stand::create([
                     'id_pabellon' => $pabellonId,
