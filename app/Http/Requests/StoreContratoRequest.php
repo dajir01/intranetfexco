@@ -36,7 +36,7 @@ class StoreContratoRequest extends FormRequest
             'direccion' => 'required|string|max:500',
             'nit' => 'required|string|max:50',
             'telefono' => 'required|string|min:7|max:20',
-            'email' => 'required|email|max:255',
+            'email' => 'nullable|email|max:255',
             'pais_id' => 'required|integer|exists:paises,id',
             'ciudad_id' => 'required|integer|exists:localidades,id',
             'cluster' => 'required|in:1,2,3,4', // Categoría de empresa
@@ -123,7 +123,6 @@ class StoreContratoRequest extends FormRequest
             'nit.required' => 'El NIT es obligatorio.',
             'telefono.required' => 'El teléfono es obligatorio.',
             'telefono.min' => 'El teléfono debe tener al menos 7 dígitos.',
-            'email.required' => 'El email es obligatorio.',
             'email.email' => 'Debe ingresar un email válido.',
             'pais_id.required' => 'Debe seleccionar un país.',
             'pais_id.exists' => 'El país seleccionado no es válido.',

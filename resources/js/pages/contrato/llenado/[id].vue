@@ -25,7 +25,7 @@ const {
   requiredRule,
   requiredSelectRule,
   requiredCredentialRule,
-  emailRule,
+  emailOptionalRule,
   phoneRule,
   nitRule,
   autocompleteIdRule,
@@ -981,7 +981,7 @@ const guardarContrato = async () => {
       direccion: formulario.value.direccion || '',
       telefono: formulario.value.telefono || '',
       fax: formulario.value.fax || '',
-      email: formulario.value.email || '',
+      email: formulario.value.email.trim(),
       web: formulario.value.web || '',
       aniversario: formulario.value.aniversario || '1900-01-01',
       nr_escritura: formulario.value.nr_escritura || 'N/A',
@@ -1009,7 +1009,7 @@ const guardarContrato = async () => {
       // Contacto
       nombre_responsable: formulario.value.nombre_contacto || '',
       telefono_responsable: formulario.value.telefono_contacto || '',
-      email_representante: formulario.value.email_contacto || '',
+      email_representante: formulario.value.email_contacto.trim(),
     }
 
     // Agregar timeout de 30 segundos
@@ -1260,11 +1260,11 @@ onMounted(() => {
                     <VCol cols="12" md="3">
                       <VTextField
                         v-model="formulario.email"
-                        label="Email *"
+                        label="Email"
                         type="email"
                         variant="outlined"
                         dense
-                        :rules="[emailRule]"
+                        :rules="[emailOptionalRule]"
                       />
                     </VCol>
                     <VCol cols="12" md="3">
@@ -1550,6 +1550,7 @@ onMounted(() => {
                         label="Correo Electrónico del Contacto"
                         type="email"
                         variant="outlined"
+                        :rules="[emailOptionalRule]"
                       />
                     </VCol>
                   </VRow>

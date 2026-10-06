@@ -12,7 +12,7 @@ const {
   requiredRule,
   requiredSelectRule,
   requiredCredentialRule,
-  emailRule,
+  emailOptionalRule,
   phoneRule,
   nitRule,
   autocompleteIdRule,
@@ -602,6 +602,8 @@ const guardarInformacion = async () => {
     // Preparar los datos a enviar
     const datos = {
       ...formulario.value,
+      email: formulario.value.email.trim(),
+      email_contacto: formulario.value.email_contacto.trim(),
       tipo_credenciales: requiereTipoCredencial.value ? formulario.value.tipo_credenciales : '0',
       // El backend conserva los nombres del formulario histórico.
       cluster: formulario.value.categoria,
@@ -783,10 +785,10 @@ onMounted(() => {
                       <VCol cols="12" md="3">
                         <VTextField
                           v-model="formulario.email"
-                          label="Email *"
+                          label="Email"
                           type="email"
                           variant="outlined"
-                          :rules="[emailRule]"
+                          :rules="[emailOptionalRule]"
                         />
                       </VCol>
                       <VCol cols="12" md="3">
@@ -1068,6 +1070,7 @@ onMounted(() => {
                         label="Correo Electrónico del Contacto"
                         type="email"
                         variant="outlined"
+                        :rules="[emailOptionalRule]"
                       />
                     </VCol>
                   </VRow>

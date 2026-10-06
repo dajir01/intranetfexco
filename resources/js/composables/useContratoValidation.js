@@ -14,12 +14,6 @@ export function useContratoValidation() {
 
   const requiredCredentialRule = v => (v !== null && v !== undefined && v !== '') || 'Debe seleccionar una opción'
   
-  const emailRule = v => {
-    if (!v || String(v).trim() === '') return 'El email es obligatorio'
-    const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return pattern.test(String(v).trim()) || 'Debe ingresar un email válido'
-  }
-  
   const emailOptionalRule = v => {
     if (!v || String(v).trim() === '') return true
     const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -58,7 +52,6 @@ export function useContratoValidation() {
     if (!formulario.direccion || String(formulario.direccion).trim() === '') errores.push('Dirección')
     if (!formulario.nit || String(formulario.nit).trim() === '') errores.push('NIT')
     if (!formulario.telefono || String(formulario.telefono).trim() === '') errores.push('Teléfono')
-    if (!formulario.email || String(formulario.email).trim() === '') errores.push('Email')
     if (!formulario.pais_id) errores.push('País')
     if (!formulario.ciudad_id) errores.push('Ciudad')
     if (!formulario.categoria || formulario.categoria === '0') errores.push('Categoría de la Empresa')
@@ -147,7 +140,6 @@ export function useContratoValidation() {
     requiredRule,
     requiredSelectRule,
     requiredCredentialRule,
-    emailRule,
     emailOptionalRule,
     phoneRule,
     nitRule,

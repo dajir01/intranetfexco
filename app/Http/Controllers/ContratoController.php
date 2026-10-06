@@ -1413,6 +1413,8 @@ class ContratoController extends Controller
                 'tipo_credenciales' => $idFeria >= 21
                     ? ['required', 'in:0,1']
                     : ['nullable', 'in:0,1'],
+                'email' => ['nullable', 'email', 'max:255'],
+                'email_representante' => ['nullable', 'email', 'max:255'],
                 'modo_precio' => ['nullable', 'in:m2,total'],
                 'precio_unit' => ['nullable', 'numeric', 'min:0.01'],
                 'precio_total' => ['nullable', 'numeric', 'min:0.01'],
@@ -1554,7 +1556,7 @@ class ContratoController extends Controller
             
             if ($request->email == '')
                 $pendientes .= ($pendientes == '' ? "" : ';') . 'email';
-            $empresa->email = $request->email;
+            $empresa->email = $request->email ?? '';
             
             if ($request->web == '')
                 $pendientes .= ($pendientes == '' ? "" : ';') . 'pagina web';
@@ -1636,7 +1638,7 @@ class ContratoController extends Controller
             
             if ($request->email_responsable == '')
                 $pendientes .= ($pendientes == '' ? "" : ';') . 'email del responsable';
-            $empresa->email_representante = $request->email_representante;
+            $empresa->email_representante = $request->email_representante ?? '';
             
             if ($request->actividad_principal == '0' || $request->actividad_principal == '')
                 $pendientes .= ($pendientes == '' ? "" : ';') . 'actividad principal';
@@ -1686,6 +1688,16 @@ class ContratoController extends Controller
                 ],
             ]);
 
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Los datos enviados no son válidos.',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
             
