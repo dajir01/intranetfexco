@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Contrato;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreContratoRequest extends FormRequest
@@ -21,6 +22,14 @@ class StoreContratoRequest extends FormRequest
      */
     public function rules(): array
     {
+        $idContrato = $this->route('id_contrato');
+        $idFeria = $idContrato
+            ? Contrato::query()->whereKey($idContrato)->value('id_feria')
+            : null;
+        $reglaTipoCredenciales = (int) $idFeria >= 21
+            ? 'required|in:0,1'
+            : 'nullable|in:0,1';
+
         return [
             // ========== SECCIÓN 1: DATOS DE LA EMPRESA ==========
             'nombre_empresa' => 'required|string|max:255',
@@ -65,7 +74,7 @@ class StoreContratoRequest extends FormRequest
             'medio_comunicacion' => 'required|in:1,2,3,4,5',
             'como_entero' => 'required|in:1,2,3,4',
             'tipo_expositor' => 'required|in:1,2,3',
-            'tipo_credenciales' => 'required|in:0,1',
+            'tipo_credenciales' => $reglaTipoCredenciales,
             'productos' => 'required|string|min:10',
             
             // Campos opcionales de la sección 3

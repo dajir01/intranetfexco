@@ -40,6 +40,7 @@ const isValid = ref(null)
 // ==================== ESTADO ====================
 const contratoId = ref(route.params.id)
 const contrato = ref(null)
+const requiereTipoCredencial = computed(() => Number(contrato.value?.id_feria) >= 21)
 const baseUrl = window.location.origin
 const empresa = ref(null)
 const cargando = ref(true)
@@ -444,9 +445,11 @@ const cargarDatos = async () => {
         formulario.value.medio_comunicacion = Number(contrato.value.medio_comunicacion) > 0 ? String(contrato.value.medio_comunicacion) : ''
         formulario.value.como_entero = Number(contrato.value.como_entero) > 0 ? String(contrato.value.como_entero) : ''
         formulario.value.tipo_expositor = Number(contrato.value.tipo_expositor) > 0 ? String(contrato.value.tipo_expositor) : ''
-        formulario.value.tipo_credenciales = contrato.value.tipo_credenciales !== null && contrato.value.tipo_credenciales !== undefined
-          ? String(contrato.value.tipo_credenciales)
-          : ''
+        formulario.value.tipo_credenciales = !requiereTipoCredencial.value
+          ? '0'
+          : contrato.value.tipo_credenciales !== null && contrato.value.tipo_credenciales !== undefined
+            ? String(contrato.value.tipo_credenciales)
+            : ''
         
         // ✅ CORRECCIÓN P3: Recuperar productos/servicios
         formulario.value.productos = contrato.value.productos || ''
@@ -945,7 +948,7 @@ const guardarContrato = async () => {
       medio_comunicacion: formulario.value.medio_comunicacion || '0',
       como_entero: formulario.value.como_entero || '0',
       tipo_expositor: formulario.value.tipo_expositor || '0',
-      tipo_credenciales: formulario.value.tipo_credenciales,
+      tipo_credenciales: requiereTipoCredencial.value ? formulario.value.tipo_credenciales : '0',
 
       // Marcas - Formato compatible con sistema antiguo
       // Guarda: "Marca1;Marca2;Marca3"
@@ -1605,7 +1608,7 @@ onMounted(() => {
                         :rules="[requiredSelectRule]"
                       />
                     </VCol>
-                    <VCol cols="12" md="3">
+                    <VCol v-if="requiereTipoCredencial" cols="12" md="3">
                       <VSelect
                         v-model="formulario.tipo_credenciales"
                         :items="[

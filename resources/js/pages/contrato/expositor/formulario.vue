@@ -29,6 +29,7 @@ const idContrato = ref(route.params.id_contrato)
 const clave = ref(route.params.clave)
 const contrato = ref(null)
 const empresa = ref(null)
+const requiereTipoCredencial = computed(() => Number(contrato.value?.id_feria) >= 21)
 const cargando = ref(true)
 const error = ref(null)
 const guardandoInfo = ref(false)
@@ -211,9 +212,11 @@ const cargarDatos = async () => {
         formulario.value.medio_comunicacion = Number(contrato.value.medio_comunicacion) > 0 ? String(contrato.value.medio_comunicacion) : ''
         formulario.value.como_entero = Number(contrato.value.como_entero) > 0 ? String(contrato.value.como_entero) : ''
         formulario.value.tipo_expositor = Number(contrato.value.tipo_expositor) > 0 ? String(contrato.value.tipo_expositor) : ''
-        formulario.value.tipo_credenciales = contrato.value.tipo_credenciales !== null && contrato.value.tipo_credenciales !== undefined
-          ? String(contrato.value.tipo_credenciales)
-          : ''
+        formulario.value.tipo_credenciales = !requiereTipoCredencial.value
+          ? '0'
+          : contrato.value.tipo_credenciales !== null && contrato.value.tipo_credenciales !== undefined
+            ? String(contrato.value.tipo_credenciales)
+            : ''
         formulario.value.productos = contrato.value.productos || ''
         
         // Marcas nacionales
@@ -599,6 +602,7 @@ const guardarInformacion = async () => {
     // Preparar los datos a enviar
     const datos = {
       ...formulario.value,
+      tipo_credenciales: requiereTipoCredencial.value ? formulario.value.tipo_credenciales : '0',
       // El backend conserva los nombres del formulario histórico.
       cluster: formulario.value.categoria,
       rubro: formulario.value.id_rubro,
@@ -1122,7 +1126,7 @@ onMounted(() => {
                         :rules="[requiredSelectRule]"
                       />
                     </VCol>
-                    <VCol cols="12" md="3">
+                    <VCol v-if="requiereTipoCredencial" cols="12" md="3">
                       <VSelect
                         v-model="formulario.tipo_credenciales"
                         :items="[

@@ -197,8 +197,10 @@ class ContratoController extends Controller
             // Tipo de expositor
             $contrato->tipo_expositor = $request->input('tipo_expositor') ?? 0;
 
-            // Tipo de credencial: 0 = física, 1 = digital
-            $contrato->tipo_credenciales = $request->input('tipo_credenciales');
+            // Eventos anteriores al 21 usan credenciales físicas por defecto.
+            $contrato->tipo_credenciales = (int) $contrato->id_feria >= 21
+                ? $request->input('tipo_credenciales')
+                : 0;
 
             // Procesar marcas nacionales: mn = [nombre1, nombre2, ...]
             $marcasNacionales = $request->input('mn', []);
@@ -1406,8 +1408,11 @@ class ContratoController extends Controller
     public function guardarLlenado($id, Request $request)
     {
         try {
+            $idFeria = (int) Contrato::query()->whereKey($id)->value('id_feria');
             $request->validate([
-                'tipo_credenciales' => ['required', 'in:0,1'],
+                'tipo_credenciales' => $idFeria >= 21
+                    ? ['required', 'in:0,1']
+                    : ['nullable', 'in:0,1'],
                 'modo_precio' => ['nullable', 'in:m2,total'],
                 'precio_unit' => ['nullable', 'numeric', 'min:0.01'],
                 'precio_total' => ['nullable', 'numeric', 'min:0.01'],
@@ -1524,7 +1529,9 @@ class ContratoController extends Controller
             $contrato->medio_comunicacion = $request->medio_comunicacion ?? '0';
             $contrato->como_entero = $request->como_entero ?? '0';
             $contrato->tipo_expositor = $request->tipo_expositor ?? '0';
-            $contrato->tipo_credenciales = $request->tipo_credenciales;
+            $contrato->tipo_credenciales = (int) $contrato->id_feria >= 21
+                ? $request->tipo_credenciales
+                : 0;
             
             $contrato->save();
 
@@ -2498,4 +2505,3 @@ class ContratoController extends Controller
         };
     }
 }
-

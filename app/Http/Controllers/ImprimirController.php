@@ -1627,7 +1627,7 @@ class ImprimirController extends Controller
             }
 
             // Tipo de credenciales (0=Física, 1=Digital)
-            $tipo_credenciales_texto = ($c->tipo_credenciales == 0) ? 'FÍSICAS' : 'DIGITALES';
+            $tipo_credenciales_texto = (int) $c->tipo_credenciales === 1 ? 'DIGITALES' : 'FÍSICAS';
 
             // 5️⃣ CARGAR PLANTILLA WORD
             $rutaWord = public_path($modelo->ruta_documento);
