@@ -46,7 +46,7 @@ class StoreContratoRequest extends FormRequest
             
             // Campos opcionales de la sección 1
             'fax' => 'nullable|string|max:20',
-            'web' => 'nullable|url|max:255',
+            'web' => 'nullable|string|max:255',
             'aniversario' => 'nullable|date',
             'nr_escritura' => 'nullable|string|max:100',
             'fecha_nr_escritura' => 'nullable|date',
