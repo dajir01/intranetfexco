@@ -95,21 +95,8 @@ class MailNotificationService
             $emails = collect();
 
             if ($configuration->areas->isNotEmpty()) {
-                $areas = $configuration->areas->pluck('area')->filter()->map(fn ($area) => mb_strtoupper(trim((string) $area)))->all();
-
-                $areaUsers = Usuario::query()
-                    ->where(function ($query) use ($areas) {
-                        foreach ($areas as $area) {
-                            $query->orWhereRaw('UPPER(TRIM(COALESCE(area, ""))) = ?', [$area]);
-                        }
-                    })
-                    ->where(function ($query) {
-                        $query->where('estado', 1)->orWhereNull('estado');
-                    })
-                    ->whereNotNull('email')
-                    ->where('email', '!=', '')
-                    ->whereRaw('TRIM(email) <> ""')
-                    ->get();
+                $areas = $configuration->areas->pluck('area')->filter()->all();
+                $areaUsers = $this->usersMatchingAreas($areas);
 
                 $emails = $emails->merge(
                     $this->filterByGranularPermissions($areaUsers, $normalized)->pluck('email')
@@ -132,26 +119,45 @@ class MailNotificationService
             return [];
         }
 
-        $areaUsers = Usuario::query()
-            ->where(function ($query) use ($areas) {
-                foreach ($areas as $area) {
-                    $query->orWhereRaw('UPPER(TRIM(COALESCE(area, ""))) = ?', [mb_strtoupper(trim((string) $area))]);
-                }
-            })
-            ->where(function ($query) {
-                $query->where('estado', 1)->orWhereNull('estado');
-            })
-            ->whereNotNull('email')
-            ->where('email', '!=', '')
-            ->whereRaw('TRIM(email) <> ""')
-            ->orderByRaw('CASE WHEN UPPER(TRIM(COALESCE(area, ""))) = "COMERCIAL" THEN 1 WHEN UPPER(TRIM(COALESCE(area, ""))) = "FINANZAS" THEN 2 ELSE 3 END ASC')
-            ->orderBy('nombre_usuario')
-            ->get();
+        $areaUsers = $this->usersMatchingAreas($areas, true);
 
         $emails = $this->filterByGranularPermissions($areaUsers, $normalized)
             ->pluck('email');
 
         return $this->sanitizeEmailList($emails->all());
+    }
+
+    /**
+     * Find active users by canonical area so legacy and current labels remain equivalent.
+     */
+    protected function usersMatchingAreas(array $areas, bool $prioritizeCommercialAndFinance = false): \Illuminate\Support\Collection
+    {
+        $areas = collect($areas)
+            ->map(fn ($area): string => trim((string) $area))
+            ->filter()
+            ->values();
+
+        if ($areas->isEmpty()) {
+            return collect();
+        }
+
+        $query = Usuario::query()
+            ->where(function ($query) {
+                $query->where('estado', 1)->orWhereNull('estado');
+            })
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->whereRaw('TRIM(email) <> ""');
+
+        if ($prioritizeCommercialAndFinance) {
+            $query->orderByRaw('CASE WHEN UPPER(TRIM(COALESCE(area, ""))) = "COMERCIAL" THEN 1 WHEN UPPER(TRIM(COALESCE(area, ""))) = "FINANZAS" THEN 2 ELSE 3 END ASC');
+            $query->orderBy('nombre_usuario');
+        }
+
+        return $query->get()
+            ->filter(fn (Usuario $user): bool => $areas->contains(
+                fn (string $area): bool => AreaTextResolver::areasMatch($area, $user->area)
+            ));
     }
 
     public function resolveCc(string $eventName): array
