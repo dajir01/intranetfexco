@@ -13,7 +13,7 @@ definePage({
 
 const route = useRoute()
 const router = useRouter()
-const { canEditContrato } = useContratoAccess()
+const { canEditContrato, canPrintContrato } = useContratoAccess()
 
 // Validar acceso
 if (!canEditContrato()) {
@@ -40,6 +40,7 @@ const isValid = ref(null)
 // ==================== ESTADO ====================
 const contratoId = ref(route.params.id)
 const contrato = ref(null)
+const contratoGenerado = computed(() => Number(contrato.value?.codigo_contrato) > 0)
 const requiereTipoCredencial = computed(() => Number(contrato.value?.id_feria) >= 21)
 const baseUrl = window.location.origin
 const empresa = ref(null)
@@ -2014,7 +2015,7 @@ onMounted(() => {
                     Cancelar
                   </VBtn>
                 </VCol>
-                <VCol cols="12" md="3">
+                <VCol v-if="!contratoGenerado" cols="12" md="3">
                   <VBtn
                     variant="tonal"
                     color="info"
@@ -2023,6 +2024,26 @@ onMounted(() => {
                     @click="modalLinkLlenado = true"
                   >
                     Ver Link
+                  </VBtn>
+                </VCol>
+                <VCol v-if="contratoGenerado && canPrintContrato()" cols="12" md="3">
+                  <VBtn
+                    @click="imprimirContrato"
+                    color="primary"
+                    block
+                    prepend-icon="tabler-printer"
+                  >
+                    Imprimir Contrato
+                  </VBtn>
+                </VCol>
+                <VCol v-if="contratoGenerado && canPrintContrato()" cols="12" md="3">
+                  <VBtn
+                    @click="imprimirAdendum"
+                    color="secondary"
+                    block
+                    prepend-icon="tabler-file-plus"
+                  >
+                    Imprimir Adendum #2
                   </VBtn>
                 </VCol>
                 <VCol cols="12" md="3">
@@ -2035,7 +2056,7 @@ onMounted(() => {
                     Guardar Contrato
                   </VBtn>
                 </VCol>
-                <VCol v-if="contrato && contrato.codigo_contrato === 0" cols="12" md="3">
+                <VCol v-if="contrato && !contratoGenerado" cols="12" md="3">
                   <VBtn
                     @click="generarContrato"
                     color="primary"
@@ -2047,19 +2068,18 @@ onMounted(() => {
                     Generar Contrato
                   </VBtn>
                 </VCol>
-                <VCol v-else-if="contrato && contrato.codigo_contrato > 0" cols="12" md="3">
-                  <VAlert
-                    type="success"
-                    variant="tonal"
-                    class="ma-0"
-                  >
-                    <div class="d-flex align-center gap-2">
-                      <VIcon icon="tabler-circle-check" />
-                      <span>Código asignado: <strong>{{ contrato.codigo_contrato }}</strong></span>
-                    </div>
-                  </VAlert>
-                </VCol>
               </VRow>
+              <VAlert
+                v-if="contratoGenerado"
+                type="success"
+                variant="tonal"
+                class="mb-6"
+              >
+                <div class="d-flex align-center gap-2">
+                  <VIcon icon="tabler-circle-check" />
+                  <span>Código asignado: <strong>{{ contrato.codigo_contrato }}</strong></span>
+                </div>
+              </VAlert>
             </VForm>
           </div>
 
