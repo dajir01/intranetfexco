@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getUserAreaLabel, getUserAreaLevel, userAreaOptions } from '@/utils/userAreas'
 
 definePage({
   meta: {
@@ -21,20 +22,6 @@ const error = ref(null)
 const isSubmitting = ref(false)
 const successMessage = ref(null)
 const showPassword = ref(false)
-
-// Opciones de área - value es el nivel_usuario (número), text es el área (texto)
-const areasOptions = [
-  { value: 1, title: 'Sistemas', text: 'Sistemas' },
-  { value: 2, title: 'Comercial', text: 'Comercial' },
-  { value: 3, title: 'Administración', text: 'Administración' },
-  { value: 4, title: 'Legal', text: 'Legal' },
-  { value: 5, title: 'Gerencia', text: 'Gerencia' },
-  { value: 6, title: 'Comunicación', text: 'Comunicación' },
-  { value: 7, title: 'Auditoría', text: 'Auditoría' },
-  { value: 8, title: 'Almacén', text: 'Almacén' },
-  { value: 11, title: 'Eventos', text: 'Eventos' },
-  { value: 12, title: 'Secretaria', text: 'Secretaria' },
-]
 
 // Opciones de jefatura
 const jefaturaOptions = [
@@ -62,14 +49,12 @@ const getEstadoLabel = (value) => {
 
 // Función para obtener nivel_usuario desde el texto del área
 const getNivelUsuarioFromArea = (areaText) => {
-  const area = areasOptions.find(a => a.text === areaText)
-  return area ? area.value : null
+  return getUserAreaLevel(areaText)
 }
 
 // Función para obtener texto del área desde nivel_usuario
 const getAreaFromNivelUsuario = (nivel) => {
-  const area = areasOptions.find(a => a.value === Number(nivel))
-  return area ? area.text : ''
+  return getUserAreaLabel(nivel) || ''
 }
 
 /**
@@ -206,7 +191,7 @@ const handleSubmit = async () => {
     const id = route.params.id
     
     // Obtener el área seleccionada
-    const areaSeleccionada = areasOptions.find(a => a.value === form.value.nivel_usuario)
+    const areaSeleccionada = userAreaOptions.find(a => a.value === form.value.nivel_usuario)
     
     const payload = {
       nombre_usuario: form.value.nombre_usuario.trim(),
@@ -425,7 +410,7 @@ onMounted(() => {
                 <VSelect
                   v-model="form.nivel_usuario"
                   label="Área *"
-                  :items="areasOptions"
+                  :items="userAreaOptions"
                   item-title="title"
                   item-value="value"
                   placeholder="Seleccione un área"

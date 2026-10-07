@@ -2,13 +2,13 @@
 import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import avatar1 from '@images/avatars/avatar-1.png'
+import { getUserAreaLabel } from '@/utils/userAreas'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const displayName = computed(() => authStore.user?.nombre_usuario || authStore.user?.nick_usuario || 'Usuario')
-const displayRole = computed(() => authStore.user?.nivel_usuario || 'Usuario')
-const displayArea = computed(() => authStore.user?.area || authStore.user?.area_nombre || 'Sin área asignada')
+const displayArea = computed(() => getUserAreaLabel(authStore.user?.nivel_usuario) || authStore.user?.area || authStore.user?.area_nombre || 'Sin área asignada')
 
 const handleLogout = async () => {
   try {

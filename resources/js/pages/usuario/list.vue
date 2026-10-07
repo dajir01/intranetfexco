@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useSafePagination } from '@/composables/useSafePagination'
 import { useAuthStore } from '@/stores/auth'
+import { getUserAreaLabel } from '@/utils/userAreas'
 
 definePage({
   meta: {
@@ -196,7 +197,7 @@ onUnmounted(() => {
         </template>
 
         <template #item.area="{ item }">
-          {{ item.area || '—' }}
+          {{ getUserAreaLabel(item.nivel_usuario) || item.area || '—' }}
         </template>
 
         <template #item.estado="{ item }">

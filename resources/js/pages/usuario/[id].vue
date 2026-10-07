@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getUserAreaLabel } from '@/utils/userAreas'
 
 definePage({
   meta: {
@@ -92,7 +93,7 @@ const fetchUsuario = async () => {
         nombre_usuario: usuario.value.nombre_usuario || '',
         nick_usuario: usuario.value.nick_usuario || '',
         email: usuario.value.email || '',
-        area: usuario.value.area || '',
+        area: getUserAreaLabel(usuario.value.nivel_usuario) || usuario.value.area || '',
         pass_usuario: '',
         jefatura: usuario.value.jefatura !== undefined ? usuario.value.jefatura : null,
         estado: usuario.value.estado !== undefined ? usuario.value.estado : null,

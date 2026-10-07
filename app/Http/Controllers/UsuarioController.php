@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use App\Models\Usuario;
 use App\Models\NotificationConfigurationUser;
 use App\Events\UsuarioActualizado;
+use App\Services\AreaTextResolver;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -51,6 +52,7 @@ class UsuarioController extends Controller
             'nombre_usuario',
             'email',
             'area',
+            'nivel_usuario',
             'estado',
         ];
 
@@ -162,7 +164,7 @@ class UsuarioController extends Controller
             $usuario->nombre_usuario = $validated['nombre_usuario'];
             $usuario->nick_usuario = $validated['nick_usuario'];
             $usuario->email = $validated['email'];
-            $usuario->area = mb_strtoupper($validated['area'], 'UTF-8');
+            $usuario->area = AreaTextResolver::labelFromNivelUsuario((int) $validated['nivel_usuario']);
             $usuario->nivel_usuario = $validated['nivel_usuario'];
             $usuario->jefatura = $validated['jefatura'];
             $usuario->estado = 1; // Activo por defecto
@@ -269,7 +271,7 @@ class UsuarioController extends Controller
             // Actualizar solo los campos permitidos
             $usuario->nombre_usuario = $validated['nombre_usuario'];
             $usuario->email = $validated['email'];
-            $usuario->area = mb_strtoupper($validated['area'], 'UTF-8');
+            $usuario->area = AreaTextResolver::labelFromNivelUsuario((int) $validated['nivel_usuario']);
             $usuario->nivel_usuario = $validated['nivel_usuario'];
             $usuario->jefatura = $validated['jefatura'];
 

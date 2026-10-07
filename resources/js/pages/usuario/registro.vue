@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getUserAreaLabel, userAreaOptions } from '@/utils/userAreas'
 
 definePage({
   meta: {
@@ -25,20 +26,6 @@ const isSubmitting = ref(false)
 const nickManuallyEdited = ref(false)
 const passwordManuallyEdited = ref(false)
 
-// Opciones de área
-const areasOptions = [
-  { value: 1, title: 'Sistemas', text: 'Sistemas' },
-  { value: 2, title: 'Comercial', text: 'Comercial' },
-  { value: 3, title: 'Administración', text: 'Administración' },
-  { value: 4, title: 'Legal', text: 'Legal' },
-  { value: 5, title: 'Gerencia', text: 'Gerencia' },
-  { value: 6, title: 'Comunicación', text: 'Comunicación' },
-  { value: 7, title: 'Auditoría', text: 'Auditoría' },
-  { value: 8, title: 'Almacén', text: 'Almacén' },
-  { value: 11, title: 'Eventos', text: 'Eventos' },
-  { value: 12, title: 'Secretaria', text: 'Secretaria' },
-]
-
 const jefaturaOptions = [
   { value: 1, title: 'Sí - Jefatura' },
   { value: 0, title: 'No - Ejecutivo' },
@@ -56,8 +43,7 @@ const form = ref({
 
 // Helpers de área
 const getAreaFromNivelUsuario = (nivel) => {
-  const area = areasOptions.find(a => a.value === Number(nivel))
-  return area ? area.text : ''
+  return getUserAreaLabel(nivel) || ''
 }
 
 // Generación de nick y contraseña a partir del nombre completo
@@ -315,7 +301,7 @@ const resetForm = () => {
               <VSelect
                 v-model="form.nivel_usuario"
                 label="Área *"
-                :items="areasOptions"
+                :items="userAreaOptions"
                 item-title="title"
                 item-value="value"
                 placeholder="Seleccione un área"
