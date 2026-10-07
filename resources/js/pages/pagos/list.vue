@@ -816,6 +816,9 @@ const snackbar = ref({ show: false, color: 'info', text: '' })
             >
               Subir Pago
             </VBtn>
+            <span v-else-if="item.saldo > 0" class="text-warning text-caption">
+              Saldo pendiente
+            </span>
             <span v-else class="text-success text-caption">Saldado</span>
           </template>
         </VDataTableServer>

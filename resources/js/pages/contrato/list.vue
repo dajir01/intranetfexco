@@ -10,6 +10,7 @@ const route = useRoute()
 const { 
   canViewContratos, 
   canCreateContrato,
+  canEditContrato,
   canDeleteContrato, 
   canUpdateEmpresa, 
   canUpdateStands,
@@ -398,6 +399,11 @@ const esContratoGenerado = (item) => {
 }
 
 const abrirLinkLlenado = (item) => {
+  if (!canEditContrato()) {
+    snackbar.value = { show: true, color: 'error', text: 'No tienes permiso para editar contratos.' }
+    return
+  }
+
   const idContrato = item.id_contrato
   const clave = item.clave
   if (!idContrato || !clave) {
@@ -446,6 +452,11 @@ const abrirEnNuevaPestana = () => {
   dialogLinkLlenado.value = false
 }
 const irAEditarReserva = (item) => {
+  if (!canUpdateEmpresa() && !canUpdateStands()) {
+    snackbar.value = { show: true, color: 'error', text: 'No tienes permiso para editar la empresa o los stands.' }
+    return
+  }
+
   const id = item.id_contrato
   const idFeria = feriaSeleccionada.value
   const path = idFeria ? `/contrato/edit/${id}?id_feria=${idFeria}` : `/contrato/edit/${id}`
@@ -751,9 +762,9 @@ const imprimirAdendum = (item) => {
                   v-bind="props"
                   :color="item.anulado ? 'error' : (esContratoGenerado(item) ? 'success' : 'info')"
                   size="small"
-                  :style="{ cursor: item.anulado ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }"
-                  class="contrato-link"
-                  @click="!item.anulado && router.push({ 
+                  :style="{ cursor: !item.anulado && canEditContrato() ? 'pointer' : 'default', transition: 'all 0.2s' }"
+                  :class="{ 'contrato-link': !item.anulado && canEditContrato() }"
+                  @click="!item.anulado && canEditContrato() && router.push({
                     path: `/contrato/llenado/${item.id_contrato}`,
                     query: { id_feria: feriaSeleccionada }
                   })"
@@ -762,7 +773,15 @@ const imprimirAdendum = (item) => {
                   {{ item.contrato?.numero || '—' }}
                 </VChip>
               </template>
-              <span>{{ item.anulado ? 'Ver contrato anulado' : 'Clic para editar/llenar contrato' }}</span>
+              <span>
+                {{
+                  item.anulado
+                    ? 'Contrato anulado'
+                    : canEditContrato()
+                      ? 'Clic para editar/llenar contrato'
+                      : 'No tienes permiso para editar este contrato'
+                }}
+              </span>
             </VTooltip>
           </template>
 
@@ -872,6 +891,7 @@ const imprimirAdendum = (item) => {
                 <VTooltip location="top" class="accion-item">
                   <template #activator="{ props }">
                     <VBtn
+                      v-if="canEditContrato()"
                       v-bind="props"
                       color="info"
                       size="small"
