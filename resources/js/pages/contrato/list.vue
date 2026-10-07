@@ -387,6 +387,7 @@ const snackbar = ref({ show: false, color: 'success', text: '' })
 const dialogLinkLlenado = ref(false)
 const linkLlenado = ref('')
 const empresaLinkLlenado = ref('')
+const linkLlenadoCopiado = ref(false)
 
 const esContratoGenerado = (item) => {
   if (item?.anulado) return false
@@ -405,37 +406,39 @@ const abrirLinkLlenado = (item) => {
   }
   linkLlenado.value = `${window.location.origin}/formulario/${idContrato}/${clave}`
   empresaLinkLlenado.value = item.empresa?.nombre || 'No identificada'
+  linkLlenadoCopiado.value = false
   dialogLinkLlenado.value = true
 }
 
 const copiarLinkLlenado = async () => {
   try {
     await navigator.clipboard.writeText(linkLlenado.value)
-    snackbar.value = { show: true, color: 'success', text: 'Link copiado al portapapeles' }
-    dialogLinkLlenado.value = false
-  } catch (err) {
+  } catch {
+    let copied = false
+    let textarea
     try {
-      const textarea = document.createElement('textarea')
+      textarea = document.createElement('textarea')
       textarea.value = linkLlenado.value
       textarea.setAttribute('readonly', '')
       textarea.style.position = 'absolute'
       textarea.style.left = '-9999px'
       document.body.appendChild(textarea)
       textarea.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(textarea)
-
-      if (ok) {
-        snackbar.value = { show: true, color: 'success', text: 'Link copiado al portapapeles' }
-        dialogLinkLlenado.value = false
-        return
-      }
-    } catch (fallbackErr) {
-      // Fallback failed
+      copied = document.execCommand('copy')
+    } catch {
+      copied = false
+    } finally {
+      textarea?.remove()
     }
 
-    snackbar.value = { show: true, color: 'error', text: 'No se pudo copiar el link' }
+    if (!copied) {
+      snackbar.value = { show: true, color: 'error', text: 'No se pudo copiar el link. Selecciónalo y cópialo manualmente.' }
+      return
+    }
   }
+
+  linkLlenadoCopiado.value = true
+  snackbar.value = { show: true, color: 'success', text: 'Enlace copiado al portapapeles.' }
 }
 
 const abrirEnNuevaPestana = () => {
@@ -1045,7 +1048,7 @@ const imprimirAdendum = (item) => {
       {{ snackbar.text }}
     </VSnackbar>
 
-    <VDialog v-model="dialogLinkLlenado" max-width="600">
+    <VDialog v-model="dialogLinkLlenado" max-width="700">
       <VCard>
         <VCardTitle class="d-flex align-center gap-2">
           <VIcon icon="tabler-link" />
@@ -1063,11 +1066,19 @@ const imprimirAdendum = (item) => {
               readonly
               :model-value="linkLlenado"
               variant="outlined"
-              append-inner-icon="tabler-copy"
-              @click:append-inner="copiarLinkLlenado"
-              hint="Click en el icono para copiar"
-              class="cursor-pointer"
+              prepend-inner-icon="tabler-link"
+              hide-details
             />
+            <VBtn
+              :color="linkLlenadoCopiado ? 'success' : 'primary'"
+              size="large"
+              block
+              class="mt-3"
+              :prepend-icon="linkLlenadoCopiado ? 'tabler-check' : 'tabler-copy'"
+              @click="copiarLinkLlenado"
+            >
+              {{ linkLlenadoCopiado ? 'Enlace copiado' : 'Copiar enlace' }}
+            </VBtn>
           </div>
         </VCardText>
         <VCardActions>
@@ -1155,4 +1166,3 @@ const imprimirAdendum = (item) => {
   }
 }
 </style>
-
