@@ -58,16 +58,19 @@ class StandControllerTest extends TestCase
         $this->assertSame([$first->id_stand, $second->id_stand], $standIds);
     }
 
-    public function test_it_preserves_the_selected_painted_mode_with_two_points(): void
+    public function test_it_preserves_reservation_coordinates_when_saving_painted_mode(): void
     {
         $pabellon = $this->createPabellon();
-        $stand = $this->createStand($pabellon, '1');
+        $stand = $this->createStand($pabellon, '1', [
+            'sup' => 250,
+            'izq' => 350,
+        ]);
 
         $request = Request::create('/stands', 'PATCH', [
             'tipo' => 2,
             'coord' => '100,200',
-            'sup' => 100,
-            'izq' => 200,
+            'sup' => 250,
+            'izq' => 350,
         ]);
         $response = (new StandController())->update($request, $pabellon->id_pabellon, $stand->id_stand);
 
@@ -75,11 +78,11 @@ class StandControllerTest extends TestCase
         $stand->refresh();
         $this->assertSame(2, (int) $stand->tipo);
         $this->assertSame('100,200', $stand->coord);
-        $this->assertSame(0.0, (float) $stand->sup);
-        $this->assertSame(0.0, (float) $stand->izq);
+        $this->assertSame(250.0, (float) $stand->sup);
+        $this->assertSame(350.0, (float) $stand->izq);
     }
 
-    public function test_it_clears_painted_coordinates_when_switching_to_reservation_mode(): void
+    public function test_it_preserves_painted_coordinates_when_saving_reservation_mode(): void
     {
         $pabellon = $this->createPabellon();
         $stand = $this->createStand($pabellon, '1', [
@@ -98,9 +101,29 @@ class StandControllerTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $stand->refresh();
         $this->assertSame(1, (int) $stand->tipo);
-        $this->assertSame('', $stand->coord);
+        $this->assertSame('100,200,300,400', $stand->coord);
         $this->assertSame(250.0, (float) $stand->sup);
         $this->assertSame(350.0, (float) $stand->izq);
+    }
+
+    public function test_it_returns_both_saved_coordinate_sets_when_loading_stands(): void
+    {
+        $pabellon = $this->createPabellon();
+        $stand = $this->createStand($pabellon, '1', [
+            'tipo' => 2,
+            'sup' => 250,
+            'izq' => 350,
+            'coord' => '100,200,300,400',
+        ]);
+
+        $response = (new StandController())->index($pabellon->id_pabellon);
+        $loadedStand = $response->getData(true)['data']['stands'][0];
+
+        $this->assertSame($stand->id_stand, $loadedStand['id_stand']);
+        $this->assertSame(2, $loadedStand['tipo']);
+        $this->assertSame('100,200,300,400', $loadedStand['coord']);
+        $this->assertSame(250.0, (float) $loadedStand['sup']);
+        $this->assertSame(350.0, (float) $loadedStand['izq']);
     }
 
     private function createPabellon(): Pabellon

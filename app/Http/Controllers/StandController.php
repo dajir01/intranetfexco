@@ -283,12 +283,6 @@ class StandController extends Controller
 
             if ($request->has('tipo') && $request->input('tipo') !== null) {
                 $tipo = (int) $request->input('tipo');
-                if ($tipo === 1) {
-                    $dataToUpdate['coord'] = '';
-                } else {
-                    $dataToUpdate['sup'] = 0;
-                    $dataToUpdate['izq'] = 0;
-                }
             } else {
                 $pintado = rtrim(trim((string) $request->input('coord', '')), ',');
                 $cantidadValores = $pintado === '' ? 0 : count(explode(',', $pintado));

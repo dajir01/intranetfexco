@@ -179,14 +179,6 @@ const cambiarModo = tipo => {
   }
 
   editForm.value.tipo = nuevoTipo
-  if (nuevoTipo === 1) {
-    editForm.value.coord = ''
-  }
-  else {
-    editForm.value.sup = ''
-    editForm.value.izq = ''
-  }
-
   cambiosPendientes.value = true
   repintarPines()
 }
