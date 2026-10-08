@@ -64,8 +64,96 @@ const currentHeight = ref(0)
 const scaleX = computed(() => currentWidth.value && originalWidth.value ? currentWidth.value / originalWidth.value : 1)
 const scaleY = computed(() => currentHeight.value && originalHeight.value ? currentHeight.value / originalHeight.value : 1)
 const isMapaListo = ref(false)
+const vistaPreviaDialog = ref(false)
+const imagenVistaPrevia = ref(null)
+const dimensionesVistaPrevia = ref({ width: 0, height: 0 })
+const errorImagenVistaPrevia = ref(false)
+const vistaPreviaDatos = computed(() => {
+  const points = []
+  let missingStands = 0
+
+  for (const stand of stands.value) {
+    let hasCoordinates = false
+    const hasReservationCoordinates = stand.izq !== null && stand.izq !== undefined && stand.izq !== ''
+      && stand.sup !== null && stand.sup !== undefined && stand.sup !== ''
+    const reservationX = Number(stand.izq)
+    const reservationY = Number(stand.sup)
+    if (hasReservationCoordinates && Number.isFinite(reservationX) && Number.isFinite(reservationY)
+      && (reservationX !== 0 || reservationY !== 0)) {
+      hasCoordinates = true
+      points.push({
+        id: `${stand.id_stand}-reservation`,
+        x: reservationX,
+        y: reservationY,
+        kind: 'reservation',
+        label: `R${stand.numero_stand}`,
+        title: `Stand ${stand.numero_stand} · Reserva`,
+      })
+    }
+
+    const coordinates = String(stand.coord || '').split(',')
+    let paintedPointIndex = 0
+    for (let index = 0; index + 1 < coordinates.length; index += 2) {
+      const rawX = coordinates[index].trim()
+      const rawY = coordinates[index + 1].trim()
+      const x = Number(rawX)
+      const y = Number(rawY)
+      if (rawX && rawY && Number.isFinite(x) && Number.isFinite(y) && (x !== 0 || y !== 0)) {
+        hasCoordinates = true
+        points.push({
+          id: `${stand.id_stand}-painted-${paintedPointIndex}`,
+          x,
+          y,
+          kind: 'painted',
+          label: paintedPointIndex === 0 ? `P${stand.numero_stand}` : '',
+          title: `Stand ${stand.numero_stand} · Pintado`,
+        })
+        paintedPointIndex++
+      }
+    }
+
+    if (!hasCoordinates)
+      missingStands++
+  }
+
+  return { points, missingStands }
+})
+const standsFaltantesPorMarcar = computed(() => vistaPreviaDatos.value.missingStands)
+const previewPins = computed(() => {
+  const { width, height } = dimensionesVistaPrevia.value
+  if (!width || !height)
+    return []
+
+  return vistaPreviaDatos.value.points.map(point => ({
+    ...point,
+    left: `${point.x / width * 100}%`,
+    top: `${point.y / height * 100}%`,
+  }))
+})
 let resizeObserver = null
 const getCsrfToken = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+
+const abrirVistaPrevia = () => {
+  if (imagenVistaPrevia.value?.naturalWidth) {
+    onImagenVistaPreviaCargada()
+  } else if (!imagenVistaPrevia.value) {
+    errorImagenVistaPrevia.value = false
+    dimensionesVistaPrevia.value = { width: 0, height: 0 }
+  }
+
+  vistaPreviaDialog.value = true
+}
+
+const onImagenVistaPreviaCargada = () => {
+  if (!imagenVistaPrevia.value)
+    return
+
+  dimensionesVistaPrevia.value = {
+    width: imagenVistaPrevia.value.naturalWidth,
+    height: imagenVistaPrevia.value.naturalHeight,
+  }
+  errorImagenVistaPrevia.value = false
+}
 
 const loadStands = async () => {
   loading.value = true
@@ -683,6 +771,9 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+          <VBtn color="secondary" prepend-icon="tabler-eye" :disabled="loading || !pabellon" @click="abrirVistaPrevia">
+            Vista previa
+          </VBtn>
           <VBtn color="primary" prepend-icon="tabler-plus" @click="openCreateDialog">
             Agregar Stands
           </VBtn>
@@ -920,11 +1011,149 @@ onUnmounted(() => {
           </VCardActions>
         </VCard>
       </VDialog>
+
+      <VDialog v-model="vistaPreviaDialog" width="95vw" max-width="1800" scrollable>
+        <VCard class="stand-preview-dialog">
+          <VCardTitle class="d-flex align-center justify-space-between flex-wrap gap-3">
+            <div class="d-flex align-center gap-2">
+              <VIcon icon="tabler-map-2" size="24" />
+              <div>
+                <div class="text-h6">Vista previa del pabellón</div>
+                <div v-if="pabellon" class="text-caption text-medium-emphasis">
+                  {{ pabellon.nombre_pabellon }} · {{ stands.length }} stands
+                </div>
+              </div>
+            </div>
+            <VBtn icon variant="text" aria-label="Cerrar vista previa" @click="vistaPreviaDialog = false">
+              <VIcon icon="tabler-x" />
+            </VBtn>
+          </VCardTitle>
+          <VDivider />
+          <VCardText class="stand-preview-content">
+            <div class="d-flex flex-wrap ga-4 mb-4">
+              <div class="d-flex align-center ga-2">
+                <span class="stand-preview-legend-dot reservation" />
+                <span class="text-body-2">Reserva</span>
+              </div>
+              <div class="d-flex align-center ga-2">
+                <span class="stand-preview-legend-dot painted" />
+                <span class="text-body-2">Pintado</span>
+              </div>
+              <span class="text-body-2 text-medium-emphasis align-self-center">
+                Puntos visibles: {{ previewPins.length }}
+              </span>
+              <span
+                class="text-body-2 align-self-center"
+                :class="standsFaltantesPorMarcar ? 'text-warning' : 'text-success'"
+              >
+                Stands faltantes por marcar: <strong>{{ standsFaltantesPorMarcar }}</strong>
+              </span>
+            </div>
+            <VAlert v-if="errorImagenVistaPrevia" type="error" variant="tonal" class="mb-4">
+              No se pudo cargar el mapa de este pabellón.
+            </VAlert>
+            <div v-else-if="rutaImagenMapa" class="stand-preview-map">
+              <img
+                ref="imagenVistaPrevia"
+                :src="rutaImagenMapa"
+                :alt="`Mapa de ${pabellon?.nombre_pabellon || 'pabellón'}`"
+                @load="onImagenVistaPreviaCargada"
+                @error="errorImagenVistaPrevia = true"
+              >
+              <div v-if="dimensionesVistaPrevia.width" class="stand-preview-pins">
+                <div
+                  v-for="pin in previewPins"
+                  :key="pin.id"
+                  class="stand-preview-pin"
+                  :class="pin.kind"
+                  :style="{ left: pin.left, top: pin.top }"
+                  :title="pin.title"
+                >
+                  <span v-if="pin.label" class="stand-preview-pin-label">{{ pin.label }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-center pa-8 text-medium-emphasis">
+              No hay un mapa asociado a este pabellón.
+            </div>
+          </VCardText>
+          <VDivider />
+          <VCardActions class="justify-end">
+            <VBtn color="primary" variant="tonal" @click="vistaPreviaDialog = false">Cerrar</VBtn>
+          </VCardActions>
+        </VCard>
+      </VDialog>
     </VCard>
   </section>
 </template>
 
 <style scoped>
+.stand-preview-dialog {
+  max-block-size: 92vh;
+}
+
+.stand-preview-content {
+  overflow: auto;
+}
+
+.stand-preview-map {
+  position: relative;
+  inline-size: 100%;
+}
+
+.stand-preview-map img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+
+.stand-preview-pins {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stand-preview-pin {
+  position: absolute;
+  inline-size: 13px;
+  block-size: 13px;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 65%);
+  transform: translate(-50%, -50%);
+}
+
+.stand-preview-pin.reservation,
+.stand-preview-legend-dot.reservation {
+  background: #e53935;
+}
+
+.stand-preview-pin.painted,
+.stand-preview-legend-dot.painted {
+  background: #1976d2;
+}
+
+.stand-preview-pin-label {
+  position: absolute;
+  inset-block-end: 100%;
+  inset-inline-start: 50%;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 78%);
+  color: white;
+  font-size: 10px;
+  line-height: 1.3;
+  transform: translateX(-50%);
+}
+
+.stand-preview-legend-dot {
+  inline-size: 12px;
+  block-size: 12px;
+  border: 1px solid white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
+}
+
 .stand-management-card {
   overflow: visible;
 }
