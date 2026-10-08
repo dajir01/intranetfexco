@@ -75,7 +75,7 @@ class StoreContratoRequest extends FormRequest
             'como_entero' => 'required|in:1,2,3,4',
             'tipo_expositor' => 'required|in:1,2,3',
             'tipo_credenciales' => $reglaTipoCredenciales,
-            'productos' => 'required|string|min:10',
+            'productos' => 'required|string',
             
             // Campos opcionales de la sección 3
             'perfil_visitante' => 'nullable|string',
@@ -155,7 +155,6 @@ class StoreContratoRequest extends FormRequest
             'tipo_expositor.required' => 'Debe seleccionar el tipo de expositor.',
             'tipo_credenciales.required' => 'Debe seleccionar el tipo de credencial.',
             'productos.required' => 'Debe describir los productos/servicios que ofrecerá.',
-            'productos.min' => 'La descripción de productos debe tener al menos 10 caracteres.',
         ];
     }
 

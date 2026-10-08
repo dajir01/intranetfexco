@@ -1070,7 +1070,13 @@ const generarContrato = async () => {
     }
   } catch (err) {
     if (err.response) {
-      mostrarNotificacion(err.response.data?.message || err.message, 'error')
+      const responseData = err.response.data
+      const validationMessages = Object.values(responseData?.errors || {}).flat()
+      const message = [responseData?.message || err.message, ...validationMessages]
+        .filter(Boolean)
+        .join(' ')
+
+      mostrarNotificacion(message, 'error')
     } else if (err.request) {
       mostrarNotificacion('Error: No hubo respuesta del servidor', 'error')
     } else {
