@@ -45,7 +45,7 @@ const editForm = ref({
   sup: '',
   izq: '',
   coord: '',
-  tipo: 0,
+  tipo: 1,
 })
 const saving = ref(false)
 // Estado del mapa e interacción
@@ -140,7 +140,7 @@ const onStandSelected = (stand) => {
       sup: '',
       izq: '',
       coord: '',
-      tipo: 0,
+      tipo: 1,
     }
     pins.value = []
     cambiosPendientes.value = false
@@ -148,24 +148,15 @@ const onStandSelected = (stand) => {
     return
   }
 
-  // Guardar estado original para poder cancelar
-  estadoOriginal.value = {
-    numero_stand: stand.numero_stand,
-    area_stand: stand.area_stand,
-    sup: stand.sup,
-    izq: stand.izq,
-    coord: stand.coord,
-    tipo: stand.tipo,
-  }
-
   editForm.value = {
-    numero_stand: stand.numero_stand || '',
-    area_stand: stand.area_stand || '',
-    sup: parseInt(stand.sup) || 0,
-    izq: parseInt(stand.izq) || 0,
+    numero_stand: String(stand.numero_stand || ''),
+    area_stand: Number(stand.area_stand) || 0,
+    sup: Number(stand.sup) || 0,
+    izq: Number(stand.izq) || 0,
     coord: stand.coord || '',
-    tipo: parseInt(stand.tipo) || 0,
+    tipo: Number(stand.tipo) === 2 ? 2 : 1,
   }
+  estadoOriginal.value = { ...editForm.value }
 
   cambiosPendientes.value = false
   
@@ -179,6 +170,25 @@ const onStandSelected = (stand) => {
       }
     }, 100)
   })
+}
+
+const cambiarModo = tipo => {
+  const nuevoTipo = Number(tipo)
+  if (![1, 2].includes(nuevoTipo) || nuevoTipo === editForm.value.tipo) {
+    return
+  }
+
+  editForm.value.tipo = nuevoTipo
+  if (nuevoTipo === 1) {
+    editForm.value.coord = ''
+  }
+  else {
+    editForm.value.sup = ''
+    editForm.value.izq = ''
+  }
+
+  cambiosPendientes.value = true
+  repintarPines()
 }
 
 /**
@@ -195,7 +205,7 @@ const repintarPines = () => {
 
   pins.value = []
 
-  if (editForm.value.tipo === 0) {
+  if (editForm.value.tipo === 1) {
     // Modo Reserva: SIEMPRE mostrar un pin usando sup e izq
     const sup = parseInt(editForm.value.sup) || 0
     const izq = parseInt(editForm.value.izq) || 0
@@ -243,7 +253,7 @@ const onMapaClick = (event) => {
   const realX = Math.round(clickX / scaleX.value)
   const realY = Math.round(clickY / scaleY.value)
 
-  if (editForm.value.tipo === 0) {
+  if (editForm.value.tipo === 1) {
     // Modo Reserva: guardar coordenadas REALES
     editForm.value = {
       ...editForm.value,
@@ -268,7 +278,7 @@ const onMapaClick = (event) => {
  * Limpiar coordenadas pintadas
  */
 const limpiarCoordenadas = () => {
-  if (editForm.value.tipo === 0) {
+  if (editForm.value.tipo === 1) {
     editForm.value.sup = ''
     editForm.value.izq = ''
   } else {
@@ -335,14 +345,7 @@ const cancelarCambios = () => {
   if (!estadoOriginal.value)
     return
 
-  editForm.value = {
-    numero_stand: estadoOriginal.value.numero_stand || '',
-    area_stand: estadoOriginal.value.area_stand || '',
-    sup: parseInt(estadoOriginal.value.sup) || 0,
-    izq: parseInt(estadoOriginal.value.izq) || 0,
-    coord: estadoOriginal.value.coord || '',
-    tipo: parseInt(estadoOriginal.value.tipo) || 0,
-  }
+  editForm.value = { ...estadoOriginal.value }
   cambiosPendientes.value = false
   repintarPines()
 }
@@ -373,7 +376,7 @@ const saveStand = async () => {
       sup: parseInt(editForm.value.sup) || 0,
       izq: parseInt(editForm.value.izq) || 0,
       coord: editForm.value.coord || '',
-      // tipo se calcula automáticamente en el backend basado en coord
+      tipo: editForm.value.tipo,
     }
 
     const res = await fetch(`/pabellones/${pabellonId.value}/stands/${selectedStand.value.id_stand}`, {
@@ -593,30 +596,29 @@ const eliminarFilaLimite = async (index) => {
   }
 }
 
-// Watcher para detectar cambios en el tipo y repintar
 watch(
-  () => editForm.value.tipo,
-  () => {
-    repintarPines()
-  },
-)
+  () => [
+    editForm.value.numero_stand,
+    editForm.value.area_stand,
+    editForm.value.sup,
+    editForm.value.izq,
+    editForm.value.coord,
+    editForm.value.tipo,
+  ],
+  values => {
+    if (!selectedStand.value || !estadoOriginal.value)
+      return
 
-// Watchers para detectar cambios en número de stand y área
-watch(
-  () => editForm.value.numero_stand,
-  (newVal, oldVal) => {
-    if (selectedStand.value && estadoOriginal.value && newVal !== estadoOriginal.value.numero_stand) {
-      cambiosPendientes.value = true
-    }
-  },
-)
+    const originalValues = [
+      estadoOriginal.value.numero_stand,
+      estadoOriginal.value.area_stand,
+      estadoOriginal.value.sup,
+      estadoOriginal.value.izq,
+      estadoOriginal.value.coord,
+      estadoOriginal.value.tipo,
+    ]
 
-watch(
-  () => editForm.value.area_stand,
-  (newVal, oldVal) => {
-    if (selectedStand.value && estadoOriginal.value && newVal !== estadoOriginal.value.area_stand) {
-      cambiosPendientes.value = true
-    }
+    cambiosPendientes.value = values.some((value, index) => value !== originalValues[index])
   },
 )
 
@@ -723,17 +725,24 @@ onUnmounted(() => {
                 <VCol cols="12" md="2">
                   <VTextField v-model.number="editForm.area_stand" label="Metraje (m)" type="number" step="0.01" min="0.01" :disabled="saving" outlined />
                 </VCol>
-                <VCol cols="12" md="3"">
-                  <VTextField v-model.number="editForm.sup" label="Sup (Y)" type="number" step="1" :readonly="editForm.tipo !== 0 || saving" outlined hint="Coordenada Y (actualizado al hacer click)" persistent-hint />
-                  <VTextField v-model.number="editForm.izq" label="Izq (X)" type="number" step="1" :readonly="editForm.tipo !== 0 || saving" outlined hint="Coordenada X (actualizado al hacer click)" persistent-hint />
+                <VCol cols="12" md="3">
+                  <VTextField v-model.number="editForm.sup" label="Sup (Y)" type="number" step="1" :readonly="editForm.tipo !== 1 || saving" outlined hint="Coordenada Y (actualizado al hacer click)" persistent-hint />
+                  <VTextField v-model.number="editForm.izq" label="Izq (X)" type="number" step="1" :readonly="editForm.tipo !== 1 || saving" outlined hint="Coordenada X (actualizado al hacer click)" persistent-hint />
                 </VCol>
                 <VCol cols="12" md="3">
-                  <VTextField v-model="editForm.coord" label="Coordenadas Pintado" type="text" :readonly="editForm.tipo !== 1 || saving" outlined persistent-hint hint="x1,y1,x2,y2,... (actualizado al hacer click)" />
+                  <VTextField v-model="editForm.coord" label="Coordenadas Pintado" type="text" :readonly="editForm.tipo !== 2 || saving" outlined persistent-hint hint="x1,y1,x2,y2,... (actualizado al hacer click)" />
                 </VCol>
                 <VCol cols="12" md="2">
-                  <VSelect v-model.number="editForm.tipo" :items="[{title:'Reserva',value:0},{title:'Pintado',value:1}]" label="Acciones" :disabled="saving" outlined />
+                  <VSelect
+                    :model-value="editForm.tipo"
+                    :items="[{ title: 'Reserva', value: 1 }, { title: 'Pintado', value: 2 }]"
+                    label="Acciones"
+                    :disabled="saving"
+                    outlined
+                    @update:model-value="cambiarModo"
+                  />
                   <p class="text-caption text-medium-emphasis mt-2">
-                    {{ editForm.tipo === 0 ? '1 pin, click para mover' : 'Múltiples pins, click para agregar' }}
+                    {{ editForm.tipo === 1 ? '1 pin, click para mover' : 'Múltiples pins, click para agregar' }}
                   </p>
                 </VCol>
               </VRow>
@@ -757,7 +766,7 @@ onUnmounted(() => {
               <div class="mb-4">
                 <p class="text-subtitle-2 font-weight-bold">Mapa del Pabellón</p>
                 <p class="text-caption text-medium-emphasis">
-                  {{ editForm.tipo === 0 
+                  {{ editForm.tipo === 1
                     ? 'Modo Reserva: Haz clic para marcar UN punto'
                     : 'Modo Pintado: Haz clic múltiples veces para marcar puntos' 
                   }}

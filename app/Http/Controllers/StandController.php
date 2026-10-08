@@ -133,7 +133,7 @@ class StandController extends Controller
             
             $stands = Stand::where('id_pabellon', $pabellonId)
                 ->where('feria', $pabellon->feria)
-                ->orderByRaw('CAST(numero_stand AS UNSIGNED) ASC')
+                ->orderBy('id_stand')
                 ->get();
 
             return response()->json([
@@ -213,7 +213,7 @@ class StandController extends Controller
                     'sup' => 0,
                     'izq' => 0,
                     'coord' => '',
-                    'tipo' => 0,
+                    'tipo' => 1,
                     'anterior' => 0,
                     'lat' => '',
                     'lon' => '',
@@ -252,7 +252,7 @@ class StandController extends Controller
             'sup' => ['nullable', 'integer'],
             'izq' => ['nullable', 'integer'],
             'coord' => ['nullable', 'string'],
-            // tipo se calcula automáticamente, no se acepta del request
+            'tipo' => ['nullable', 'integer', 'in:1,2'],
         ]);
 
         if ($validator->fails()) {
@@ -281,40 +281,20 @@ class StandController extends Controller
                 'coord',
             ]);
 
-            // CALCULAR TIPO AUTOMÁTICAMENTE basado en la lógica del sistema antiguo
-            // ────────────────────────────────────────────────────────────────────
-            // Lógica heredada: $ax = explode(",", $request->pintado);
-            //                  (count($ax) < 6) ? $tipo = 1 : $tipo = 2;
-            //
-            // Explicación:
-            // - Cada punto tiene 2 coordenadas (x,y)
-            // - 1 punto = 2 valores → tipo 1 (Reserva)
-            // - 2 puntos = 4 valores → tipo 1 (Reserva)
-            // - 3 puntos = 6 valores → tipo 2 (Pintado)
-            // - 4+ puntos = 8+ valores → tipo 2 (Pintado)
-            //
-            // Resultado:
-            // - tipo 1 = Reserva (hasta 2 puntos, menos de 6 valores)
-            // - tipo 2 = Pintado (3 o más puntos, 6 o más valores)
-            // ────────────────────────────────────────────────────────────────────
-            
-            $pintado = $request->input('coord', '');
-            
-            // Limpiar string: quitar espacios y comas finales
-            $pintado = trim($pintado);
-            $pintado = rtrim($pintado, ',');
-            
-            if (empty($pintado)) {
-                // Sin coordenadas → Reserva
-                $dataToUpdate['tipo'] = 1;
+            if ($request->has('tipo') && $request->input('tipo') !== null) {
+                $tipo = (int) $request->input('tipo');
+                if ($tipo === 1) {
+                    $dataToUpdate['coord'] = '';
+                } else {
+                    $dataToUpdate['sup'] = 0;
+                    $dataToUpdate['izq'] = 0;
+                }
             } else {
-                // Separar por comas y contar
-                $coordenadas = explode(',', $pintado);
-                $cantidadValores = count($coordenadas);
-                
-                // Aplicar lógica del sistema antiguo exactamente
-                $dataToUpdate['tipo'] = ($cantidadValores < 6) ? 1 : 2;
+                $pintado = rtrim(trim((string) $request->input('coord', '')), ',');
+                $cantidadValores = $pintado === '' ? 0 : count(explode(',', $pintado));
+                $tipo = $cantidadValores >= 6 ? 2 : 1;
             }
+            $dataToUpdate['tipo'] = $tipo;
 
             $stand->update($dataToUpdate);
 
