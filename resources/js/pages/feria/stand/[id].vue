@@ -461,7 +461,6 @@ const saveStand = async () => {
       sup: parseInt(editForm.value.sup) || 0,
       izq: parseInt(editForm.value.izq) || 0,
       coord: editForm.value.coord || '',
-      tipo: editForm.value.tipo,
     }
 
     const res = await fetch(`/pabellones/${pabellonId.value}/stands/${selectedStand.value.id_stand}`, {
@@ -492,7 +491,8 @@ const saveStand = async () => {
     const updatedStandId = Number(updatedStand.id_stand)
     stands.value = stands.value.map(stand => Number(stand.id_stand) === updatedStandId ? updatedStand : stand)
     selectedStand.value = updatedStand
-    onStandSelected(updatedStand)
+    estadoOriginal.value = { ...editForm.value }
+    cambiosPendientes.value = false
     standSuccess.value = json.message || 'Stand actualizado correctamente.'
     standSuccessTimeout = setTimeout(() => {
       standSuccess.value = null

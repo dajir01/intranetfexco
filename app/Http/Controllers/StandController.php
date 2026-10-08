@@ -252,7 +252,6 @@ class StandController extends Controller
             'sup' => ['nullable', 'integer'],
             'izq' => ['nullable', 'integer'],
             'coord' => ['nullable', 'string'],
-            'tipo' => ['nullable', 'integer', 'in:1,2'],
         ]);
 
         if ($validator->fails()) {
@@ -281,14 +280,9 @@ class StandController extends Controller
                 'coord',
             ]);
 
-            if ($request->has('tipo') && $request->input('tipo') !== null) {
-                $tipo = (int) $request->input('tipo');
-            } else {
-                $pintado = rtrim(trim((string) $request->input('coord', '')), ',');
-                $cantidadValores = $pintado === '' ? 0 : count(explode(',', $pintado));
-                $tipo = $cantidadValores >= 6 ? 2 : 1;
-            }
-            $dataToUpdate['tipo'] = $tipo;
+            $pintado = rtrim(trim((string) $request->input('coord', '')), ',');
+            $cantidadValores = $pintado === '' ? 0 : count(explode(',', $pintado));
+            $dataToUpdate['tipo'] = $cantidadValores >= 6 ? 2 : 1;
 
             $stand->update($dataToUpdate);
 

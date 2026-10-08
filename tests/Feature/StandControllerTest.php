@@ -76,7 +76,7 @@ class StandControllerTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $stand->refresh();
-        $this->assertSame(2, (int) $stand->tipo);
+        $this->assertSame(1, (int) $stand->tipo);
         $this->assertSame('100,200', $stand->coord);
         $this->assertSame(250.0, (float) $stand->sup);
         $this->assertSame(350.0, (float) $stand->izq);
@@ -92,7 +92,7 @@ class StandControllerTest extends TestCase
 
         $request = Request::create('/stands', 'PATCH', [
             'tipo' => 1,
-            'coord' => '100,200,300,400',
+            'coord' => '100,200,300,400,500,600',
             'sup' => 250,
             'izq' => 350,
         ]);
@@ -100,8 +100,8 @@ class StandControllerTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $stand->refresh();
-        $this->assertSame(1, (int) $stand->tipo);
-        $this->assertSame('100,200,300,400', $stand->coord);
+        $this->assertSame(2, (int) $stand->tipo);
+        $this->assertSame('100,200,300,400,500,600', $stand->coord);
         $this->assertSame(250.0, (float) $stand->sup);
         $this->assertSame(350.0, (float) $stand->izq);
     }
