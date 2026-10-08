@@ -21,6 +21,8 @@ const selectedStand = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const success = ref(null)
+const standSuccess = ref(null)
+let standSuccessTimeout = null
 
 // Diálogo de creación de stands
 const createDialog = ref(false)
@@ -133,6 +135,10 @@ const abrirLimitesCredenciales = async () => {
 }
 
 const onStandSelected = (stand) => {
+  standSuccess.value = null
+  clearTimeout(standSuccessTimeout)
+  standSuccessTimeout = null
+
   if (!stand) {
     editForm.value = {
       numero_stand: '',
@@ -162,13 +168,10 @@ const onStandSelected = (stand) => {
   
   // Recalcular mapa después de seleccionar stand para asegurar layout estable
   nextTick(() => {
-    setTimeout(() => {
-      if (isMapaListo.value) {
-        recalcularMapa()
-      } else {
-        repintarPines()
-      }
-    }, 100)
+    if (isMapaListo.value)
+      recalcularMapa()
+    else
+      repintarPines()
   })
 }
 
@@ -359,6 +362,8 @@ const saveStand = async () => {
 
   error.value = null
   success.value = null
+  standSuccess.value = null
+  clearTimeout(standSuccessTimeout)
   saving.value = true
 
   try {
@@ -392,14 +397,19 @@ const saveStand = async () => {
       throw new Error(json.message || `HTTP ${res.status}`)
     }
 
-    success.value = json.message || 'Stand actualizado correctamente.'
-    cambiosPendientes.value = false
-    await loadStands()
-    const updatedStand = stands.value.find(s => s.id_stand === selectedStand.value.id_stand)
-    if (updatedStand) {
-      selectedStand.value = updatedStand
-      onStandSelected(updatedStand)
-    }
+    const updatedStand = json?.data
+    if (!updatedStand)
+      throw new Error('El servidor guardó los cambios, pero no devolvió el stand actualizado.')
+
+    const updatedStandId = Number(updatedStand.id_stand)
+    stands.value = stands.value.map(stand => Number(stand.id_stand) === updatedStandId ? updatedStand : stand)
+    selectedStand.value = updatedStand
+    onStandSelected(updatedStand)
+    standSuccess.value = json.message || 'Stand actualizado correctamente.'
+    standSuccessTimeout = setTimeout(() => {
+      standSuccess.value = null
+      standSuccessTimeout = null
+    }, 3000)
   } catch (err) {
     error.value = err.message || 'No se pudo guardar el stand.'
     console.error('Error guardando stand:', err)
@@ -639,6 +649,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  clearTimeout(standSuccessTimeout)
+
   // Limpiar ResizeObserver
   if (resizeObserver) {
     resizeObserver.disconnect()
@@ -652,7 +664,7 @@ onUnmounted(() => {
 
 <template>
   <section>
-    <VCard>
+    <VCard class="stand-management-card">
       <VCardTitle class="d-flex align-center justify-space-between flex-wrap gap-4">
         <div class="d-flex align-center gap-2">
           <VBtn 
@@ -693,66 +705,82 @@ onUnmounted(() => {
         </VAlert>
       </VCardText>
       <VCardText class="pt-6">
-        <VRow>
-          <VCol cols="12" md="6">
-            <VSelect v-model="selectedStand" :items="stands" item-title="numero_stand" item-value="id_stand" label="Seleccionar Stand" placeholder="Seleccione un stand" :loading="loading" :disabled="cambiosPendientes" return-object clearable @update:model-value="onStandSelected">
-              <template #item="{ props, item }">
-                <VListItem v-bind="props" :title="`Stand ${item.raw.numero_stand}`" :subtitle="`Area: ${item.raw.area_stand} m2`" />
-              </template>
-            </VSelect>
-          </VCol>
-        </VRow>
-        <div v-if="selectedStand" class="mt-6">
-          <VCard>
-            <VCardTitle class="d-flex align-center gap-2">
-              <VIcon icon="tabler-edit" size="24" />
-              Editar Stand {{ selectedStand.numero_stand }}
-            </VCardTitle>
-            <VDivider />
-            <VCardText>
-              <VRow>
-                <VCol cols="12" md="2">
-                  <VTextField v-model="editForm.numero_stand" label="Numero de Stand" type="text" :disabled="saving" outlined />
-                </VCol>
-                <VCol cols="12" md="2">
-                  <VTextField v-model.number="editForm.area_stand" label="Metraje (m)" type="number" step="0.01" min="0.01" :disabled="saving" outlined />
-                </VCol>
-                <VCol cols="12" md="3">
-                  <VTextField v-model.number="editForm.sup" label="Sup (Y)" type="number" step="1" :readonly="editForm.tipo !== 1 || saving" outlined hint="Coordenada Y (actualizado al hacer click)" persistent-hint />
-                  <VTextField v-model.number="editForm.izq" label="Izq (X)" type="number" step="1" :readonly="editForm.tipo !== 1 || saving" outlined hint="Coordenada X (actualizado al hacer click)" persistent-hint />
-                </VCol>
-                <VCol cols="12" md="3">
-                  <VTextField v-model="editForm.coord" label="Coordenadas Pintado" type="text" :readonly="editForm.tipo !== 2 || saving" outlined persistent-hint hint="x1,y1,x2,y2,... (actualizado al hacer click)" />
-                </VCol>
-                <VCol cols="12" md="2">
-                  <VSelect
-                    :model-value="editForm.tipo"
-                    :items="[{ title: 'Reserva', value: 1 }, { title: 'Pintado', value: 2 }]"
-                    label="Acciones"
-                    :disabled="saving"
-                    outlined
-                    @update:model-value="cambiarModo"
-                  />
-                  <p class="text-caption text-medium-emphasis mt-2">
-                    {{ editForm.tipo === 1 ? '1 pin, click para mover' : 'Múltiples pins, click para agregar' }}
-                  </p>
-                </VCol>
-              </VRow>
-            </VCardText>
-            <VDivider />
-            <VCardActions class="justify-end">
-              <VBtn v-if="cambiosPendientes" variant="tonal" color="secondary" :disabled="saving" @click="cancelarCambios">
-                Cancelar
-              </VBtn>
-              <VBtn v-if="cambiosPendientes" color="warning" prepend-icon="tabler-eraser" :disabled="saving" @click="limpiarCoordenadas">
-                Limpiar Coordenadas
-              </VBtn>
-              <VBtn color="primary" prepend-icon="tabler-device-floppy" :loading="saving" :disabled="saving || !cambiosPendientes" @click="saveStand">
-                Guardar Cambios
-              </VBtn>
-            </VCardActions>
+        <div v-if="selectedStand" class="stand-map-workspace">
+          <div class="stand-map-sticky-controls">
+            <VCard>
+              <VCardText class="pb-2">
+                <VAlert
+                  v-if="standSuccess"
+                  type="success"
+                  variant="tonal"
+                  closable
+                  icon="tabler-circle-check"
+                  class="mb-4"
+                  @click:close="standSuccess = null"
+                >
+                  <div class="text-body-2">{{ standSuccess }}</div>
+                </VAlert>
+                <VRow>
+                  <VCol cols="12" md="6">
+                    <VSelect v-model="selectedStand" :items="stands" item-title="numero_stand" item-value="id_stand" label="Seleccionar Stand" placeholder="Seleccione un stand" :loading="loading" :disabled="cambiosPendientes" return-object clearable @update:model-value="onStandSelected">
+                      <template #item="{ props, item }">
+                        <VListItem v-bind="props" :title="`Stand ${item.raw.numero_stand}`" :subtitle="`Area: ${item.raw.area_stand} m2`" />
+                      </template>
+                    </VSelect>
+                  </VCol>
+                </VRow>
+              </VCardText>
+              <VCardTitle class="d-flex align-center gap-2">
+                <VIcon icon="tabler-edit" size="24" />
+                Editar Stand {{ selectedStand.numero_stand }}
+              </VCardTitle>
+              <VDivider />
+              <VCardText>
+                <VRow>
+                  <VCol cols="12" md="2">
+                    <VTextField v-model="editForm.numero_stand" label="Numero de Stand" type="text" :disabled="saving" outlined />
+                  </VCol>
+                  <VCol cols="12" md="2">
+                    <VTextField v-model.number="editForm.area_stand" label="Metraje (m)" type="number" step="0.01" min="0.01" :disabled="saving" outlined />
+                  </VCol>
+                  <VCol cols="12" md="3">
+                    <VTextField v-model.number="editForm.sup" label="Sup (Y)" type="number" step="1" :readonly="editForm.tipo !== 1 || saving" outlined hint="Coordenada Y (actualizado al hacer click)" persistent-hint />
+                    <VTextField v-model.number="editForm.izq" label="Izq (X)" type="number" step="1" :readonly="editForm.tipo !== 1 || saving" outlined hint="Coordenada X (actualizado al hacer click)" persistent-hint />
+                  </VCol>
+                  <VCol cols="12" md="3">
+                    <VTextField v-model="editForm.coord" label="Coordenadas Pintado" type="text" :readonly="editForm.tipo !== 2 || saving" outlined persistent-hint hint="x1,y1,x2,y2,... (actualizado al hacer click)" />
+                  </VCol>
+                  <VCol cols="12" md="2">
+                    <VSelect
+                      :model-value="editForm.tipo"
+                      :items="[{ title: 'Reserva', value: 1 }, { title: 'Pintado', value: 2 }]"
+                      label="Acciones"
+                      :disabled="saving"
+                      outlined
+                      @update:model-value="cambiarModo"
+                    />
+                    <p class="text-caption text-medium-emphasis mt-2">
+                      {{ editForm.tipo === 1 ? '1 pin, click para mover' : 'Múltiples pins, click para agregar' }}
+                    </p>
+                  </VCol>
+                </VRow>
+              </VCardText>
+              <VDivider />
+              <VCardActions class="justify-end">
+                <VBtn v-if="cambiosPendientes" variant="tonal" color="secondary" :disabled="saving" @click="cancelarCambios">
+                  Cancelar
+                </VBtn>
+                <VBtn v-if="cambiosPendientes" color="warning" prepend-icon="tabler-eraser" :disabled="saving" @click="limpiarCoordenadas">
+                  Limpiar Coordenadas
+                </VBtn>
+                <VBtn color="primary" prepend-icon="tabler-device-floppy" :loading="saving" :disabled="saving || !cambiosPendientes" @click="saveStand">
+                  Guardar Cambios
+                </VBtn>
+              </VCardActions>
+            </VCard>
+          </div>
 
-            <!-- Mapa interactivo -->
+          <VCard class="mt-6">
             <VDivider />
             <VCardText class="pt-4">
               <div class="mb-4">
@@ -760,32 +788,28 @@ onUnmounted(() => {
                 <p class="text-caption text-medium-emphasis">
                   {{ editForm.tipo === 1
                     ? 'Modo Reserva: Haz clic para marcar UN punto'
-                    : 'Modo Pintado: Haz clic múltiples veces para marcar puntos' 
+                    : 'Modo Pintado: Haz clic múltiples veces para marcar puntos'
                   }}
                 </p>
               </div>
               <div style="position: relative; display: inline-block; max-width: 100%; width: 100%;">
-                <img 
+                <img
                   ref="imagenMapa"
-                  :src="rutaImagenMapa" 
+                  :src="rutaImagenMapa"
                   alt="Mapa del Pabellón"
                   style="max-width: 100%; cursor: crosshair; border: 2px solid #ddd; border-radius: 4px; display: block;"
                   @click="onMapaClick"
                   @load="onImagenCargada"
-                />
-                
-                <!-- Indicador de carga mientras el mapa no está listo -->
-                <div 
+                >
+                <div
                   v-if="!isMapaListo"
                   style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.8); pointer-events: none;"
                 >
                   <VProgressCircular indeterminate color="primary" size="48" />
                 </div>
-                
-                <!-- Contenedor de pines - solo visible cuando el mapa está listo -->
-                <div 
+                <div
                   v-if="isMapaListo"
-                  ref="contenedorPuntos" 
+                  ref="contenedorPuntos"
                   style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
                 >
                   <div
@@ -801,10 +825,21 @@ onUnmounted(() => {
             </VCardText>
           </VCard>
         </div>
-        <div v-else-if="!loading && stands.length === 0" class="text-center pa-8">
-          <VIcon icon="tabler-layout-grid-add" size="64" color="disabled" class="mb-4" />
-          <div class="text-h6 text-disabled">No hay stands registrados</div>
-          <div class="text-body-2 text-disabled mt-2">Haz clic en "Agregar Stands" para comenzar</div>
+        <div v-else>
+          <VRow>
+            <VCol cols="12" md="6">
+              <VSelect v-model="selectedStand" :items="stands" item-title="numero_stand" item-value="id_stand" label="Seleccionar Stand" placeholder="Seleccione un stand" :loading="loading" :disabled="cambiosPendientes" return-object clearable @update:model-value="onStandSelected">
+                <template #item="{ props, item }">
+                  <VListItem v-bind="props" :title="`Stand ${item.raw.numero_stand}`" :subtitle="`Area: ${item.raw.area_stand} m2`" />
+                </template>
+              </VSelect>
+            </VCol>
+          </VRow>
+          <div v-if="!loading && stands.length === 0" class="text-center pa-8">
+            <VIcon icon="tabler-layout-grid-add" size="64" color="disabled" class="mb-4" />
+            <div class="text-h6 text-disabled">No hay stands registrados</div>
+            <div class="text-body-2 text-disabled mt-2">Haz clic en "Agregar Stands" para comenzar</div>
+          </div>
         </div>
       </VCardText>
       <VDialog v-model="createDialog" width="600" persistent>
@@ -890,6 +925,27 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.stand-management-card {
+  overflow: visible;
+}
+
+.stand-map-workspace {
+  overflow: visible;
+}
+
+@media (min-width: 960px) {
+  .stand-map-sticky-controls {
+    position: sticky;
+    inset-block-start: 72px;
+    z-index: 10;
+    padding: 8px 12px 12px;
+    margin: -8px -12px 0;
+    background: rgb(var(--v-theme-background));
+    border-radius: 12px;
+    box-shadow: 0 8px 18px rgb(0 0 0 / 16%);
+  }
+}
+
 .mapa-container {
   position: relative;
   display: inline-block;
