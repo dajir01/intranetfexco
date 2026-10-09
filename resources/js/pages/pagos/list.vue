@@ -4,6 +4,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSafePagination } from '@/composables/useSafePagination'
 import { useAuthStore } from '@/stores/auth'
+import { openPdfWithError } from '@/utils/openPdfWithError'
 
 const router = useRouter()
 const route = useRoute()
@@ -301,14 +302,12 @@ const reciboAutomaticoAplica = computed(() => (
 ))
 
 // Función para imprimir contrato
-const imprimirContrato = (idContrato) => {
+const imprimirContrato = async idContrato => {
   const url = `/contratos/${idContrato}/imprimir`
-  window.open(url, '_blank')
-  snackbar.value = { 
-    show: true, 
-    color: 'success', 
-    text: 'Abriendo impresión del contrato...' 
-  }
+
+  await openPdfWithError(url, message => {
+    snackbar.value = { show: true, color: 'error', text: message }
+  })
 }
 
 // Función para abrir dialog de pago

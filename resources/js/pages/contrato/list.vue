@@ -4,6 +4,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useContratoAccess } from '@/composables/useContratoAccess'
 import { useSafePagination } from '@/composables/useSafePagination'
+import { openPdfWithError } from '@/utils/openPdfWithError'
 
 const router = useRouter()
 const route = useRoute()
@@ -531,7 +532,7 @@ const confirmarAnularContrato = async () => {
 }
 
 // Abrir impresión de contrato en nueva pestaña
-const imprimirContrato = (item) => {
+const imprimirContrato = async item => {
   try {
     if (!item || item.anulado) {
       snackbar.value = { show: true, color: 'warning', text: 'Contrato anulado: no disponible para impresión.' }
@@ -543,13 +544,16 @@ const imprimirContrato = (item) => {
       return
     }
     const url = `/contratos/${item.id_contrato}/imprimir`
-    window.open(url, '_blank')
+
+    await openPdfWithError(url, message => {
+      snackbar.value = { show: true, color: 'error', text: message }
+    })
   } catch (e) {
     snackbar.value = { show: true, color: 'error', text: 'No se pudo abrir la impresión del contrato.' }
   }
 }
 
-const imprimirAdendum = (item) => {
+const imprimirAdendum = async item => {
   try {
     if (!item || item.anulado) {
       snackbar.value = { show: true, color: 'warning', text: 'Contrato anulado: no disponible para impresión.' }
@@ -560,7 +564,10 @@ const imprimirAdendum = (item) => {
       return
     }
     const url = `/imprimir/adendum/${item.id_contrato}`
-    window.open(url, '_blank')
+
+    await openPdfWithError(url, message => {
+      snackbar.value = { show: true, color: 'error', text: message }
+    })
   } catch (e) {
     snackbar.value = { show: true, color: 'error', text: 'No se pudo abrir la impresión del adendum.' }
   }

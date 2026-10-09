@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useContratoAccess } from '@/composables/useContratoAccess'
 import { useContratoValidation } from '@/composables/useContratoValidation'
+import { openPdfWithError } from '@/utils/openPdfWithError'
 
 definePage({
   meta: {
@@ -1106,22 +1107,22 @@ const volver = () => {
 }
 
 // ==================== FUNCIONES DE IMPRESIÓN ====================
-const imprimirContrato = () => {
+const imprimirContrato = async () => {
   if (!contratoId.value) {
     mostrarNotificacion('No se pudo obtener el ID del contrato', 'error')
     return
   }
   const url = `/contratos/${contratoId.value}/imprimir`
-  window.open(url, '_blank')
+  await openPdfWithError(url, message => mostrarNotificacion(message, 'error'))
 }
 
-const imprimirAdendum = () => {
+const imprimirAdendum = async () => {
   if (!contratoId.value) {
     mostrarNotificacion('No se pudo obtener el ID del contrato', 'error')
     return
   }
   const url = `/imprimir/adendum/${contratoId.value}`
-  window.open(url, '_blank')
+  await openPdfWithError(url, message => mostrarNotificacion(message, 'error'))
 }
 
 onMounted(() => {

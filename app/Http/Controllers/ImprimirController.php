@@ -57,7 +57,7 @@ class ImprimirController extends Controller
                 // ✅ USAR FPDF (COMPORTAMIENTO ACTUAL)
                 return $this->imprimirContratoFPDF($id);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error en punto de entrada de impresión: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
@@ -1381,8 +1381,7 @@ class ImprimirController extends Controller
 
             // 3️⃣ VALIDAR QUE EXISTE MODELO WORD PARA ADENDUM
             if (empty($c->id_modeloademda)) {
-                // Fallback a FPDF si no existe modelo
-                return $this->adendumFPDF($id_contrato);
+                throw new \RuntimeException('El contrato no tiene un modelo de adendum asignado.');
             }
 
             $modelo = DB::table('modelo_contrato')
@@ -1391,8 +1390,9 @@ class ImprimirController extends Controller
                 ->first();
 
             if (!$modelo || empty($modelo->ruta_documento)) {
-                // Fallback a FPDF si modelo no existe o no tiene archivo
-                return $this->adendumFPDF($id_contrato);
+                throw new \RuntimeException(
+                    'No se encontró el modelo de adendum asignado (ID ' . $c->id_modeloademda . ') o no tiene un archivo configurado.'
+                );
             }
 
             // 4️⃣ CARGAR PLANTILLA WORD
@@ -1450,12 +1450,14 @@ class ImprimirController extends Controller
                 $rutaPDFFinal = $this->convertirDocxAPdfAlternativo($rutaTemporal);
             }
             
-            // Si aún falla, devolver DOCX como último recurso
+            // No sustituir silenciosamente la plantilla asignada por el PDF genérico.
             if (empty($rutaPDFFinal) || !file_exists($rutaPDFFinal)) {
-                Log::error('No se pudo convertir el adendum Word a PDF. Se usará el formato PDF FPDF.');
+                Log::error('No se pudo convertir el adendum Word a PDF para el contrato ' . $id_contrato . '.');
                 @unlink($rutaTemporal);
                 @unlink($rutaWordTemp);
-                return $this->adendumFPDF($id_contrato);
+                throw new \RuntimeException(
+                    'No se pudo convertir el modelo Word del adendum a PDF. Verifique que LibreOffice esté instalado y que el servidor tenga permisos para ejecutarlo.'
+                );
             }
 
             // 9️⃣ ENVIAR PDF AL NAVEGADOR
@@ -1470,18 +1472,12 @@ class ImprimirController extends Controller
             @unlink($rutaPDFFinal);
             @unlink($rutaWordTemp);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error generando adendum desde Word: ' . $e->getMessage() . ' - ' . $e->getFile() . ':' . $e->getLine());
-            
-            // Fallback a FPDF en caso de error
-            try {
-                return $this->adendumFPDF($id_contrato);
-            } catch (\Exception $e2) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al generar el PDF del adendum: ' . $e->getMessage()
-                ], 500);
-            }
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo generar el PDF desde el modelo Word asignado: ' . $e->getMessage(),
+            ], 500);
         }
     }
 
@@ -1532,8 +1528,7 @@ class ImprimirController extends Controller
 
             // 3️⃣ VALIDAR QUE EXISTE MODELO WORD
             if (empty($c->id_modelocontrato)) {
-                // Fallback a FPDF si no existe modelo
-                return $this->imprimirContratoFPDF($id);
+                throw new \RuntimeException('La feria no tiene un modelo de contrato asignado.');
             }
 
             $modelo = DB::table('modelo_contrato')
@@ -1541,8 +1536,9 @@ class ImprimirController extends Controller
                 ->first();
 
             if (!$modelo || empty($modelo->ruta_documento)) {
-                // Fallback a FPDF si modelo no existe
-                return $this->imprimirContratoFPDF($id);
+                throw new \RuntimeException(
+                    'No se encontró el modelo de contrato asignado (ID ' . $c->id_modelocontrato . ') o no tiene un archivo configurado.'
+                );
             }
 
             // 4️⃣ CALCULAR TODAS LAS VARIABLES (reutilizar lógica FPDF)
@@ -1771,12 +1767,14 @@ class ImprimirController extends Controller
                 $rutaPDFFinal = $this->convertirDocxAPdfAlternativo($rutaTemporal);
             }
             
-            // Si aún falla, devolver DOCX como último recurso
+            // No sustituir silenciosamente la plantilla asignada por el PDF genérico.
             if (empty($rutaPDFFinal) || !file_exists($rutaPDFFinal)) {
-                Log::error('No se pudo convertir el contrato Word a PDF. Se usará el formato PDF FPDF.');
+                Log::error('No se pudo convertir el contrato Word a PDF para el contrato ' . $id . '.');
                 @unlink($rutaTemporal);
                 @unlink($rutaWordTemp);
-                return $this->imprimirContratoFPDF($id);
+                throw new \RuntimeException(
+                    'No se pudo convertir el modelo Word del contrato a PDF. Verifique que LibreOffice esté instalado y que el servidor tenga permisos para ejecutarlo.'
+                );
             }
 
             // 🔟 ENVIAR PDF AL NAVEGADOR
@@ -1791,18 +1789,12 @@ class ImprimirController extends Controller
             @unlink($rutaPDFFinal);
             @unlink($rutaWordTemp);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error generando contrato desde Word: ' . $e->getMessage() . ' - ' . $e->getFile() . ':' . $e->getLine());
-            
-            // Fallback a FPDF en caso de error
-            try {
-                return $this->imprimirContratoFPDF($id);
-            } catch (\Exception $e2) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Error al generar el PDF del contrato: ' . $e->getMessage()
-                ], 500);
-            }
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo generar el PDF desde el modelo Word asignado: ' . $e->getMessage(),
+            ], 500);
         }
     }
 

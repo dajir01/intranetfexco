@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { openPdfWithError } from '@/utils/openPdfWithError'
 
 definePage({
   meta: { requiresAuth: true },
@@ -68,11 +69,11 @@ const pagoLabel = (val) => {
   return m[val] ?? String(val ?? '—')
 }
 
-const abrirContratoPdf = (idContrato) => {
+const abrirContratoPdf = async (idContrato) => {
   if (!idContrato || !auth.can('contratos.print'))
     return
 
-  window.open(`/contratos/${idContrato}/imprimir`, '_blank')
+  await openPdfWithError(`/contratos/${idContrato}/imprimir`)
 }
 
 const getNumeroContrato = (contratoItem) => {
