@@ -1804,6 +1804,8 @@ class ImprimirController extends Controller
      */
     private function convertirDocxAPdfLibreOffice($rutaDocx)
     {
+        $perfilLibreOffice = null;
+
         try {
             $rutaPDF = str_replace('.docx', '.pdf', $rutaDocx);
             $dirTemp = dirname($rutaPDF);
@@ -1852,7 +1854,20 @@ class ImprimirController extends Controller
                     return null;
                 }
 
-                $comando = escapeshellarg($ejecutableSoffice) . ' --headless --convert-to pdf:writer_pdf_Export --outdir ' . escapeshellarg($dirTemp) . ' ' . escapeshellarg($rutaDocx) . ' 2>&1';
+                $perfilLibreOffice = sys_get_temp_dir() . '/lo-profile-' . bin2hex(random_bytes(8));
+                if (!mkdir($perfilLibreOffice, 0700)) {
+                    throw new \RuntimeException('No se pudo crear el perfil temporal de LibreOffice.');
+                }
+
+                $perfilUri = 'file://' . str_replace(
+                    '%2F',
+                    '/',
+                    rawurlencode(str_replace('\\', '/', $perfilLibreOffice))
+                );
+                $comando = escapeshellarg($ejecutableSoffice)
+                    . ' -env:UserInstallation=' . escapeshellarg($perfilUri)
+                    . ' --headless --convert-to pdf:writer_pdf_Export --outdir '
+                    . escapeshellarg($dirTemp) . ' ' . escapeshellarg($rutaDocx) . ' 2>&1';
             }
             
             // Ejecutar conversión
@@ -1874,6 +1889,10 @@ class ImprimirController extends Controller
         } catch (\Exception $e) {
             Log::warning("Error en convertirDocxAPdfLibreOffice: " . $e->getMessage());
             return null;
+        } finally {
+            if ($perfilLibreOffice !== null && File::isDirectory($perfilLibreOffice)) {
+                File::deleteDirectory($perfilLibreOffice);
+            }
         }
     }
 
