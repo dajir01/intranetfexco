@@ -15,10 +15,14 @@ class LimiteCredencial extends Model
         'tipo_area',
         'limite_sup',
         'cant_credenciales',
+        'pot_contratada',
+        'lim_entradas',
     ];
 
     protected $casts = [
         'limite_sup' => 'float',
         'cant_credenciales' => 'integer',
+        'pot_contratada' => 'integer',
+        'lim_entradas' => 'integer',
     ];
 }

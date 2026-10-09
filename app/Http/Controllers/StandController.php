@@ -341,7 +341,13 @@ class StandController extends Controller
                 ->where('id_feria', $feriaId)
                 ->where('tipo_area', $pabellonId)
                 ->orderBy('limite_sup', 'asc')
-                ->get();
+                ->get([
+                    'id_limite as id',
+                    'limite_sup',
+                    'cant_credenciales',
+                    'pot_contratada',
+                    'lim_entradas',
+                ]);
 
             return response()->json([
                 'success' => true,
@@ -363,8 +369,11 @@ class StandController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'limites' => ['required', 'array'],
-            'limites.*.limite_sup' => ['nullable', 'numeric'],
-            'limites.*.cant_credenciales' => ['nullable', 'integer'],
+            'limites.*.id' => ['nullable', 'integer'],
+            'limites.*.limite_sup' => ['required', 'numeric', 'min:0.01'],
+            'limites.*.cant_credenciales' => ['required', 'integer', 'min:0'],
+            'limites.*.pot_contratada' => ['required', 'integer', 'min:0'],
+            'limites.*.lim_entradas' => ['required', 'integer', 'min:0'],
         ]);
 
         if ($validator->fails()) {
@@ -382,25 +391,34 @@ class StandController extends Controller
             DB::beginTransaction();
 
             foreach ($request->limites as $limite) {
-                // Si tiene id significa que ya existe
-                if (isset($limite['id']) && $limite['id']) {
+                $datosLimite = [
+                    'limite_sup' => $limite['limite_sup'],
+                    'cant_credenciales' => $limite['cant_credenciales'],
+                    'pot_contratada' => $limite['pot_contratada'],
+                    'lim_entradas' => $limite['lim_entradas'],
+                ];
+
+                if (!empty($limite['id'])) {
+                    $limiteExistente = DB::table('limite_credenciales')
+                        ->where('id_limite', $limite['id'])
+                        ->where('id_feria', $feriaId)
+                        ->where('tipo_area', $pabellonId)
+                        ->exists();
+
+                    if (!$limiteExistente) {
+                        throw new \RuntimeException('Uno de los límites ya no existe para este pabellón.');
+                    }
+
                     DB::table('limite_credenciales')
-                        ->where('id', $limite['id'])
-                        ->update([
-                            'limite_sup' => $limite['limite_sup'] ?? null,
-                            'cant_credenciales' => $limite['cant_credenciales'] ?? null,
-                            'pot_contratada' => 0,
-                            'lim_entradas' => 0,
-                        ]);
+                        ->where('id_limite', $limite['id'])
+                        ->where('id_feria', $feriaId)
+                        ->where('tipo_area', $pabellonId)
+                        ->update($datosLimite);
                 } else {
-                    // Es un nuevo registro
                     DB::table('limite_credenciales')->insert([
                         'id_feria' => $feriaId,
                         'tipo_area' => $pabellonId,
-                        'limite_sup' => $limite['limite_sup'] ?? null,
-                        'cant_credenciales' => $limite['cant_credenciales'] ?? null,
-                        'pot_contratada' => 0,
-                        'lim_entradas' => 0,
+                        ...$datosLimite,
                     ]);
                 }
             }
@@ -430,8 +448,13 @@ class StandController extends Controller
     public function eliminarLimiteCredencial($pabellonId, $id)
     {
         try {
-            // Borrar por ID directamente
-            $limite = DB::table('limite_credenciales')->where('id', $id)->first();
+            $pabellon = Pabellon::findOrFail($pabellonId);
+            $feriaId = $pabellon->feria;
+            $limiteQuery = DB::table('limite_credenciales')
+                ->where('id_limite', $id)
+                ->where('id_feria', $feriaId)
+                ->where('tipo_area', $pabellonId);
+            $limite = $limiteQuery->first();
 
             if (!$limite) {
                 return response()->json([
@@ -440,7 +463,11 @@ class StandController extends Controller
                 ], 404);
             }
 
-            DB::table('limite_credenciales')->where('id', $id)->delete();
+            DB::table('limite_credenciales')
+                ->where('id_limite', $id)
+                ->where('id_feria', $feriaId)
+                ->where('tipo_area', $pabellonId)
+                ->delete();
 
             return response()->json([
                 'success' => true,

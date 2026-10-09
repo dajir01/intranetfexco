@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
 class ContratoController extends Controller
@@ -917,6 +918,14 @@ class ContratoController extends Controller
                     'nro_entradas' => $contrato->nro_entradas,
                 ]
             ]);
+        } catch (ValidationException $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first(),
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -1312,6 +1321,14 @@ class ContratoController extends Controller
                 'contrato_id' => $contrato->id_contrato
             ]);
 
+        } catch (ValidationException $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first(),
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             DB::rollBack();
             // Si es conflicto de concurrencia, retornar 409
@@ -1340,27 +1357,36 @@ class ContratoController extends Controller
      */
     private function calcularCredenciales($idFeria, $idPabellon, $metraje)
     {
-        // Buscar límite de credenciales
-        $limite = LimiteCredencial::where('id_feria', $idFeria)
+        $limites = LimiteCredencial::where('id_feria', $idFeria)
             ->where('tipo_area', $idPabellon)
-            ->where('limite_sup', '>=', $metraje)
             ->orderBy('limite_sup', 'asc')
+            ->get();
+
+        if ($limites->isEmpty()) {
+            throw ValidationException::withMessages([
+                'limites' => 'No hay límites configurados para este pabellón y feria. Configure al menos un límite antes de crear o actualizar el contrato.',
+            ]);
+        }
+
+        // Buscar límite de credenciales
+        $limite = $limites
+            ->where('limite_sup', '>=', $metraje)
+            ->sortBy('limite_sup')
             ->first();
 
         if ($limite) {
-            // Usar valores directos del límite
             return [
-                'credenciales' => $limite->cant_credenciales,
-                'potencia' => $limite->cant_credenciales, // Mismo valor
-                'entradas' => $limite->cant_credenciales, // Mismo valor
+                'credenciales' => (int) $limite->cant_credenciales,
+                'potencia' => (int) $limite->pot_contratada,
+                'entradas' => (int) $limite->lim_entradas,
             ];
         }
 
         // Si no existe límite exacto, aplicar regla de tres
         // Buscar el límite más cercano
-        $limiteCercano = LimiteCredencial::where('id_feria', $idFeria)
-            ->where('tipo_area', $idPabellon)
-            ->orderBy('limite_sup', 'desc')
+        $limiteCercano = $limites
+            ->where('limite_sup', '>', 0)
+            ->sortByDesc('limite_sup')
             ->first();
 
         if ($limiteCercano) {
@@ -1369,17 +1395,14 @@ class ContratoController extends Controller
             
             return [
                 'credenciales' => $credenciales,
-                'potencia' => $credenciales,
-                'entradas' => $credenciales,
+                'potencia' => (int) round($limiteCercano->pot_contratada * $factor, 0, PHP_ROUND_HALF_UP),
+                'entradas' => (int) round($limiteCercano->lim_entradas * $factor, 0, PHP_ROUND_HALF_UP),
             ];
         }
 
-        // Por defecto, si no hay límites configurados
-        return [
-            'credenciales' => 2,
-            'potencia' => 2,
-            'entradas' => 2,
-        ];
+        throw ValidationException::withMessages([
+            'limites' => 'No hay un límite de superficie válido configurado para este pabellón y feria. Configure al menos un límite mayor que cero.',
+        ]);
     }
 
     /**

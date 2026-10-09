@@ -211,6 +211,10 @@ const abrirLimitesCredenciales = async () => {
     limitesCredenciales.value = (json.data || []).map(limite => ({
       ...limite,
       id: limite.id != null ? Number(limite.id) : null,
+      ['pot_contratada']: Number(limite.pot_contratada ?? 0),
+      ['lim_entradas']: Number(limite.lim_entradas ?? 0),
+      originalPotencia: Number(limite.pot_contratada ?? 0),
+      originalEntradas: Number(limite.lim_entradas ?? 0),
       isNew: false,
     }))
     credencialesDialog.value = true
@@ -568,26 +572,39 @@ const agregarFijaLimite = () => {
     id: null,
     limite_sup: null,
     cant_credenciales: null,
+    ['pot_contratada']: 0,
+    ['lim_entradas']: 0,
     isNew: true,
   }
+
   limitesCredenciales.value.push(nuevaFila)
 }
 
 const guardarLimitesCredenciales = async () => {
   savingLimites.value = true
-  try {
-    // Filtrar SOLO los registros nuevos (isNew === true)
-    const limitesNuevos = limitesCredenciales.value.filter(l => l.isNew === true)
 
-    // Si no hay registros nuevos, no hacer nada
-    if (limitesNuevos.length === 0) {
+  try {
+    const limitesModificados = limitesCredenciales.value.filter(limite =>
+      limite.isNew
+      || Number(limite.pot_contratada) !== limite.originalPotencia
+      || Number(limite.lim_entradas) !== limite.originalEntradas,
+    )
+
+    if (limitesModificados.length === 0) {
       success.value = 'No hay cambios para guardar.'
       credencialesDialog.value = false
+
       return
     }
 
     const payload = {
-      limites: limitesNuevos,
+      limites: limitesModificados.map(limite => ({
+        id: limite.id,
+        limite_sup: Number(limite.limite_sup),
+        cant_credenciales: Number(limite.cant_credenciales),
+        ['pot_contratada']: Number(limite.pot_contratada),
+        ['lim_entradas']: Number(limite.lim_entradas),
+      })),
     }
 
     const res = await fetch(`/pabellones/${pabellonId.value}/limites-credenciales`, {
@@ -962,7 +979,7 @@ onUnmounted(() => {
       </VDialog>
 
       <!-- VDialog para Límites de Credenciales -->
-      <VDialog v-model="credencialesDialog" width="900" persistent>
+      <VDialog v-model="credencialesDialog" width="1200" max-width="95vw" persistent>
         <VCard>
           <VCardTitle class="d-flex align-center gap-2">
             <VIcon icon="tabler-license" size="24" />
@@ -975,6 +992,8 @@ onUnmounted(() => {
                 <tr class="bg-primary-container">
                   <th class="pa-3">Límite de Superficie (m²)</th>
                   <th class="pa-3">Cantidad de Credenciales</th>
+                  <th class="pa-3">Potencia contratada (W)</th>
+                  <th class="pa-3">N.º de entradas</th>
                   <th class="pa-3 text-center">Acciones</th>
                 </tr>
               </thead>
@@ -985,6 +1004,12 @@ onUnmounted(() => {
                   </td>
                   <td class="pa-3">
                     <VTextField v-model.number="limite.cant_credenciales" type="number" min="0" :readonly="!limite.isNew" :disabled="savingLimites" variant="outlined" density="compact" />
+                  </td>
+                  <td class="pa-3">
+                    <VTextField v-model.number="limite.pot_contratada" type="number" min="0" :disabled="savingLimites" variant="outlined" density="compact" />
+                  </td>
+                  <td class="pa-3">
+                    <VTextField v-model.number="limite.lim_entradas" type="number" min="0" :disabled="savingLimites" variant="outlined" density="compact" />
                   </td>
                   <td class="pa-3 text-center">
                     <VBtn icon variant="text" size="small" color="error" :disabled="savingLimites || deletingRowIndex === index" :loading="deletingRowIndex === index" @click="eliminarFilaLimite(index)">
