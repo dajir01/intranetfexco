@@ -4,12 +4,37 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use FPDF;
 use PhpOffice\PhpWord\TemplateProcessor;
 
 class ImprimirController extends Controller
 {
+    private const MODEL_CONTRACTS_DIR = 'images/modelocontratos';
+
+    private function resolveModelDocumentPath(?string $documentPath): ?string
+    {
+        $documentPath = str_replace('\\', '/', ltrim(trim((string) $documentPath), '/'));
+        if (
+            $documentPath === '' ||
+            !str_starts_with($documentPath, self::MODEL_CONTRACTS_DIR . '/') ||
+            in_array('..', explode('/', $documentPath), true)
+        ) {
+            return null;
+        }
+
+        $publicPath = public_path($documentPath);
+        if (File::exists($publicPath)) {
+            return $publicPath;
+        }
+
+        $privatePath = Storage::disk('private')->path($documentPath);
+
+        return File::exists($privatePath) ? $privatePath : null;
+    }
+
     /**
      * Punto de entrada para imprimir contrato.
      * Decide entre FPDF o plantilla Word según id_modelocontrato.
@@ -1371,9 +1396,8 @@ class ImprimirController extends Controller
             }
 
             // 4️⃣ CARGAR PLANTILLA WORD
-            $rutaWord = public_path($modelo->ruta_documento);
-            
-            if (!file_exists($rutaWord)) {
+            $rutaWord = $this->resolveModelDocumentPath($modelo->ruta_documento);
+            if ($rutaWord === null) {
                 throw new \Exception('Archivo de plantilla no encontrado: ' . $modelo->ruta_documento);
             }
 
@@ -1630,9 +1654,8 @@ class ImprimirController extends Controller
             $tipo_credenciales_texto = (int) $c->tipo_credenciales === 1 ? 'DIGITALES' : 'FÍSICAS';
 
             // 5️⃣ CARGAR PLANTILLA WORD
-            $rutaWord = public_path($modelo->ruta_documento);
-            
-            if (!file_exists($rutaWord)) {
+            $rutaWord = $this->resolveModelDocumentPath($modelo->ruta_documento);
+            if ($rutaWord === null) {
                 throw new \Exception('Archivo de plantilla no encontrado: ' . $modelo->ruta_documento);
             }
 
