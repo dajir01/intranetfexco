@@ -1880,15 +1880,27 @@ class ImprimirController extends Controller
 
                 $perfilLibreOffice = sys_get_temp_dir() . '/lo-profile-' . bin2hex(random_bytes(8));
                 if (!mkdir($perfilLibreOffice, 0700)) {
-                    throw new \RuntimeException('No se pudo crear el perfil temporal de LibreOffice.');
+                    throw new \RuntimeException('No se pudo crear el directorio temporal de LibreOffice.');
+                }
+
+                $homeLibreOffice = $perfilLibreOffice . '/home';
+                $cacheFuentes = $homeLibreOffice . '/.cache/fontconfig';
+                $perfilUsuario = $perfilLibreOffice . '/profile';
+                if (
+                    !mkdir($cacheFuentes, 0700, true) ||
+                    !mkdir($perfilUsuario, 0700)
+                ) {
+                    throw new \RuntimeException('No se pudieron crear el perfil y la caché temporal de LibreOffice.');
                 }
 
                 $perfilUri = 'file://' . str_replace(
                     '%2F',
                     '/',
-                    rawurlencode(str_replace('\\', '/', $perfilLibreOffice))
+                    rawurlencode(str_replace('\\', '/', $perfilUsuario))
                 );
-                $comando = escapeshellarg($ejecutableSoffice)
+                $comando = 'HOME=' . escapeshellarg($homeLibreOffice)
+                    . ' XDG_CACHE_HOME=' . escapeshellarg($homeLibreOffice . '/.cache')
+                    . ' ' . escapeshellarg($ejecutableSoffice)
                     . ' -env:UserInstallation=' . escapeshellarg($perfilUri)
                     . ' --headless --convert-to pdf:writer_pdf_Export --outdir '
                     . escapeshellarg($dirTemp) . ' ' . escapeshellarg($rutaDocx) . ' 2>&1';
@@ -1938,8 +1950,7 @@ class ImprimirController extends Controller
 
     /**
      * Convierte DOCX a PDF usando método alternativo
-     * Para Windows, intenta usar PowerShell + Word COM
-     * Para Linux/Mac, intenta usar LibreOffice de nuevo con opciones diferentes
+     * En Windows, intenta usar PowerShell + Word COM y luego LibreOffice.
      */
     private function convertirDocxAPdfAlternativo($rutaDocx)
     {
@@ -1997,16 +2008,14 @@ PS;
                 }
                 
                 Log::warning("Word ExportAsFixedFormat falló (código $returnCode). Output: " . implode(' | ', $output));
-            }
-            
-            // Método fallback: Intenta LibreOffice con configuración mínima
-            $comando = null;
-            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                $comando = 'libreoffice --convert-to pdf --outdir ' . escapeshellarg(dirname($rutaPDF)) . ' ' . escapeshellarg($rutaDocx);
             } else {
-                $comando = 'libreoffice --convert-to pdf --outdir ' . escapeshellarg(dirname($rutaPDF)) . ' ' . escapeshellarg($rutaDocx);
+                return null;
             }
             
+            // Fallback for Windows when Word COM is unavailable.
+            $comando = 'libreoffice --headless --convert-to pdf --outdir '
+                . escapeshellarg(dirname($rutaPDF)) . ' ' . escapeshellarg($rutaDocx);
+
             $output = [];
             $returnCode = 0;
             exec($comando . ' 2>&1', $output, $returnCode);
