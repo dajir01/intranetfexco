@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use FPDF;
+use PhpOffice\PhpWord\Settings;
 use PhpOffice\PhpWord\TemplateProcessor;
 
 class ImprimirController extends Controller
@@ -1407,6 +1408,7 @@ class ImprimirController extends Controller
             \App\Http\Controllers\ModeloContratoController::limpiarDocxFragmentado($rutaWordTemp);
 
             $templateProcessor = new TemplateProcessor($rutaWordTemp);
+            Settings::setOutputEscapingEnabled(true);
             
             // Configurar los caracteres de apertura y cierre para que coincidan con el template
             $templateProcessor->setMacroChars('{', '}');
@@ -1424,11 +1426,7 @@ class ImprimirController extends Controller
 
             // 6️⃣ REEMPLAZAR MARCADORES EN WORD
             foreach ($reemplazos as $marcador => $valor) {
-                try {
-                    $templateProcessor->setValue($marcador, (string)$valor);
-                } catch (\Exception $e) {
-                    // Marcador no encontrado en el template, continuar
-                }
+                $templateProcessor->setValue($marcador, $this->normalizarValorXml($valor));
             }
 
             // 7️⃣ GUARDAR WORD TEMPORAL
@@ -1674,6 +1672,7 @@ class ImprimirController extends Controller
             \App\Http\Controllers\ModeloContratoController::aplicarBloquePagoRestante($rutaWordTemp, $saldoPendiente > 0);
 
             $templateProcessor = new TemplateProcessor($rutaWordTemp);
+            Settings::setOutputEscapingEnabled(true);
             
             // CRÍTICO: El template usa {marcador} pero PhpOffice por defecto busca ${marcador}
             // Configurar los caracteres de apertura y cierre para que coincidan con el template
@@ -1749,11 +1748,7 @@ class ImprimirController extends Controller
 
             // 7️⃣ REEMPLAZAR MARCADORES EN WORD
             foreach ($reemplazos as $marcador => $valor) {
-                try {
-                    $templateProcessor->setValue($marcador, (string)$valor);
-                } catch (\Exception $e) {
-                    // Marcador no encontrado en el template, continuar
-                }
+                $templateProcessor->setValue($marcador, $this->normalizarValorXml($valor));
             }
 
             // 8️⃣ GUARDAR WORD TEMPORAL
@@ -2171,6 +2166,22 @@ PS;
         }
         $normalizado = trim((string)$valor);
         return empty($normalizado) ? 'N/A' : $normalizado;
+    }
+
+    private function normalizarValorXml($valor): string
+    {
+        $texto = (string) $valor;
+        $normalizado = preg_replace(
+            '/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u',
+            '',
+            $texto
+        );
+
+        if ($normalizado === null) {
+            throw new \RuntimeException('Un valor del contrato contiene texto que no está codificado como UTF-8 válido.');
+        }
+
+        return $normalizado;
     }
 
     /**
