@@ -1452,11 +1452,19 @@ class ImprimirController extends Controller
             
             // No sustituir silenciosamente la plantilla asignada por el PDF genérico.
             if (empty($rutaPDFFinal) || !file_exists($rutaPDFFinal)) {
-                Log::error('No se pudo convertir el adendum Word a PDF para el contrato ' . $id_contrato . '.');
+                Log::error('No se pudo convertir el adendum Word a PDF.', [
+                    'contrato_id' => (int) $id_contrato,
+                    'modelo_id' => (int) $modelo->id_modelo_contrato,
+                    'plantilla' => basename($modelo->ruta_documento),
+                    'documento_temporal' => basename($rutaTemporal),
+                    'documento_temporal_existe' => is_file($rutaTemporal),
+                    'documento_temporal_legible' => is_readable($rutaTemporal),
+                    'documento_temporal_bytes' => is_file($rutaTemporal) ? filesize($rutaTemporal) : null,
+                ]);
                 @unlink($rutaTemporal);
                 @unlink($rutaWordTemp);
                 throw new \RuntimeException(
-                    'No se pudo convertir el modelo Word del adendum a PDF. Verifique que LibreOffice esté instalado y que el servidor tenga permisos para ejecutarlo.'
+                    'No se pudo convertir el modelo Word del adendum a PDF. Revise la plantilla asignada y el detalle técnico en el log del servidor.'
                 );
             }
 
@@ -1769,11 +1777,19 @@ class ImprimirController extends Controller
             
             // No sustituir silenciosamente la plantilla asignada por el PDF genérico.
             if (empty($rutaPDFFinal) || !file_exists($rutaPDFFinal)) {
-                Log::error('No se pudo convertir el contrato Word a PDF para el contrato ' . $id . '.');
+                Log::error('No se pudo convertir el contrato Word a PDF.', [
+                    'contrato_id' => (int) $id,
+                    'modelo_id' => (int) $modelo->id_modelo_contrato,
+                    'plantilla' => basename($modelo->ruta_documento),
+                    'documento_temporal' => basename($rutaTemporal),
+                    'documento_temporal_existe' => is_file($rutaTemporal),
+                    'documento_temporal_legible' => is_readable($rutaTemporal),
+                    'documento_temporal_bytes' => is_file($rutaTemporal) ? filesize($rutaTemporal) : null,
+                ]);
                 @unlink($rutaTemporal);
                 @unlink($rutaWordTemp);
                 throw new \RuntimeException(
-                    'No se pudo convertir el modelo Word del contrato a PDF. Verifique que LibreOffice esté instalado y que el servidor tenga permisos para ejecutarlo.'
+                    'No se pudo convertir el modelo Word del contrato a PDF. Revise la plantilla asignada y el detalle técnico en el log del servidor.'
                 );
             }
 
@@ -1805,11 +1821,18 @@ class ImprimirController extends Controller
     private function convertirDocxAPdfLibreOffice($rutaDocx)
     {
         $perfilLibreOffice = null;
+        $rutaPDF = str_replace('.docx', '.pdf', $rutaDocx);
+        $dirTemp = dirname($rutaPDF);
+        $contexto = [
+            'documento' => basename($rutaDocx),
+            'documento_existe' => is_file($rutaDocx),
+            'documento_legible' => is_readable($rutaDocx),
+            'documento_bytes' => is_file($rutaDocx) ? filesize($rutaDocx) : null,
+            'directorio_salida_escribible' => is_writable($dirTemp),
+            'sapi' => PHP_SAPI,
+        ];
 
         try {
-            $rutaPDF = str_replace('.docx', '.pdf', $rutaDocx);
-            $dirTemp = dirname($rutaPDF);
-            
             $comando = null;
             
             if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
@@ -1850,9 +1873,10 @@ class ImprimirController extends Controller
                     ->first(fn ($ruta) => is_executable($ruta));
 
                 if (!$ejecutableSoffice) {
-                    Log::warning('No se encontró LibreOffice/soffice para convertir DOCX a PDF.');
+                    Log::warning('No se encontró un ejecutable LibreOffice/soffice para convertir DOCX a PDF.', $contexto);
                     return null;
                 }
+                $contexto['ejecutable'] = $ejecutableSoffice;
 
                 $perfilLibreOffice = sys_get_temp_dir() . '/lo-profile-' . bin2hex(random_bytes(8));
                 if (!mkdir($perfilLibreOffice, 0700)) {
@@ -1876,18 +1900,34 @@ class ImprimirController extends Controller
             exec($comando, $output, $returnCode);
             
             if ($returnCode !== 0) {
-                Log::warning("LibreOffice conversión falló. Código: {$returnCode}, Comando: {$comando}, Output: " . implode("\n", $output));
+                Log::warning('LibreOffice no pudo convertir el DOCX a PDF.', $contexto + [
+                    'codigo_salida' => $returnCode,
+                    'salida' => implode("\n", $output),
+                ]);
                 return null;
             }
             
-            if (file_exists($rutaPDF)) {
-                Log::info("Conversión exitosa con LibreOffice: {$rutaPDF}");
+            if (is_file($rutaPDF) && filesize($rutaPDF) > 0 && file_get_contents($rutaPDF, false, null, 0, 5) === '%PDF-') {
+                Log::info('Conversión exitosa con LibreOffice.', $contexto + [
+                    'pdf' => basename($rutaPDF),
+                    'pdf_bytes' => filesize($rutaPDF),
+                ]);
                 return $rutaPDF;
             }
-            
+
+            Log::warning('LibreOffice terminó sin generar un PDF válido.', $contexto + [
+                'codigo_salida' => $returnCode,
+                'pdf_existe' => is_file($rutaPDF),
+                'pdf_bytes' => is_file($rutaPDF) ? filesize($rutaPDF) : null,
+                'salida' => implode("\n", $output),
+            ]);
+
             return null;
-        } catch (\Exception $e) {
-            Log::warning("Error en convertirDocxAPdfLibreOffice: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::warning('Excepción al convertir DOCX a PDF con LibreOffice.', $contexto + [
+                'error' => $e->getMessage(),
+                'tipo_error' => get_class($e),
+            ]);
             return null;
         } finally {
             if ($perfilLibreOffice !== null && File::isDirectory($perfilLibreOffice)) {
@@ -1969,16 +2009,28 @@ PS;
             
             $output = [];
             $returnCode = 0;
-            exec($comando, $output, $returnCode);
+            exec($comando . ' 2>&1', $output, $returnCode);
             
-            if (file_exists($rutaPDF)) {
+            if (is_file($rutaPDF) && filesize($rutaPDF) > 0 && file_get_contents($rutaPDF, false, null, 0, 5) === '%PDF-') {
                 Log::info("Conversión exitosa con método alternativo: {$rutaPDF}");
                 return $rutaPDF;
             }
-            
+
+            Log::warning('La conversión alternativa DOCX a PDF también falló.', [
+                'documento' => basename($rutaDocx),
+                'codigo_salida' => $returnCode,
+                'pdf_existe' => is_file($rutaPDF),
+                'pdf_bytes' => is_file($rutaPDF) ? filesize($rutaPDF) : null,
+                'salida' => implode("\n", $output),
+            ]);
+
             return null;
-        } catch (\Exception $e) {
-            Log::warning("Error en convertirDocxAPdfAlternativo: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::warning('Excepción en la conversión alternativa DOCX a PDF.', [
+                'documento' => basename($rutaDocx),
+                'error' => $e->getMessage(),
+                'tipo_error' => get_class($e),
+            ]);
             return null;
         }
     }
