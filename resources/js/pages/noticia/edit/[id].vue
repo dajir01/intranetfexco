@@ -362,13 +362,14 @@ onMounted(() => {
 
                     <!-- Negrilla -->
                     <VBtn
-                      icon="tabler-bold"
+                      icon
                       size="small"
-                      variant="text"
                       :disabled="!editor"
-                      :class="{ 'bg-primary text-white': editor?.isActive('bold') }"
+                      :variant="editor?.isActive('bold') ? 'tonal' : 'text'"
+                      :color="editor?.isActive('bold') ? 'primary' : 'default'"
                       @click="editor?.chain().focus().toggleBold().run()"
                     >
+                      <VIcon icon="tabler-bold" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -379,13 +380,14 @@ onMounted(() => {
 
                     <!-- Itálica -->
                     <VBtn
-                      icon="tabler-italic"
+                      icon
                       size="small"
-                      variant="text"
                       :disabled="!editor"
-                      :class="{ 'bg-primary text-white': editor?.isActive('italic') }"
+                      :variant="editor?.isActive('italic') ? 'tonal' : 'text'"
+                      :color="editor?.isActive('italic') ? 'primary' : 'default'"
                       @click="editor?.chain().focus().toggleItalic().run()"
                     >
+                      <VIcon icon="tabler-italic" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -396,13 +398,14 @@ onMounted(() => {
 
                     <!-- Hipervínculo -->
                     <VBtn
-                      icon="tabler-link"
+                      icon
                       size="small"
-                      variant="text"
                       :disabled="!editor"
-                      :class="{ 'bg-primary text-white': editor?.isActive('link') }"
+                      :variant="editor?.isActive('link') ? 'tonal' : 'text'"
+                      :color="editor?.isActive('link') ? 'primary' : 'default'"
                       @click="showLinkDialog = true"
                     >
+                      <VIcon icon="tabler-link" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -418,13 +421,14 @@ onMounted(() => {
 
                     <!-- Viñetas -->
                     <VBtn
-                      icon="tabler-list"
+                      icon
                       size="small"
-                      variant="text"
                       :disabled="!editor"
-                      :class="{ 'bg-primary text-white': editor?.isActive('bulletList') }"
+                      :variant="editor?.isActive('bulletList') ? 'tonal' : 'text'"
+                      :color="editor?.isActive('bulletList') ? 'primary' : 'default'"
                       @click="editor?.chain().focus().toggleBulletList().run()"
                     >
+                      <VIcon icon="tabler-list" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -435,13 +439,14 @@ onMounted(() => {
 
                     <!-- Lista Numerada -->
                     <VBtn
-                      icon="tabler-list-numbers"
+                      icon
                       size="small"
-                      variant="text"
                       :disabled="!editor"
-                      :class="{ 'bg-primary text-white': editor?.isActive('orderedList') }"
+                      :variant="editor?.isActive('orderedList') ? 'tonal' : 'text'"
+                      :color="editor?.isActive('orderedList') ? 'primary' : 'default'"
                       @click="editor?.chain().focus().toggleOrderedList().run()"
                     >
+                      <VIcon icon="tabler-list-numbers" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -452,12 +457,14 @@ onMounted(() => {
 
                     <!-- Indentación Izquierda -->
                     <VBtn
-                      icon="tabler-indent-decrease"
+                      icon
                       size="small"
                       variant="text"
+                      color="default"
                       :disabled="!editor"
                       @click="editor?.chain().focus().liftListItem('listItem').run()"
                     >
+                      <VIcon icon="tabler-indent-decrease" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -468,12 +475,14 @@ onMounted(() => {
 
                     <!-- Indentación Derecha -->
                     <VBtn
-                      icon="tabler-indent-increase"
+                      icon
                       size="small"
                       variant="text"
+                      color="default"
                       :disabled="!editor"
                       @click="editor?.chain().focus().sinkListItem('listItem').run()"
                     >
+                      <VIcon icon="tabler-indent-increase" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -489,13 +498,14 @@ onMounted(() => {
 
                     <!-- Blockquote -->
                     <VBtn
-                      icon="tabler-blockquote"
+                      icon
                       size="small"
-                      variant="text"
                       :disabled="!editor"
-                      :class="{ 'bg-primary text-white': editor?.isActive('blockquote') }"
+                      :variant="editor?.isActive('blockquote') ? 'tonal' : 'text'"
+                      :color="editor?.isActive('blockquote') ? 'primary' : 'default'"
                       @click="editor?.chain().focus().toggleBlockquote().run()"
                     >
+                      <VIcon icon="tabler-blockquote" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -511,12 +521,14 @@ onMounted(() => {
 
                     <!-- Deshacer -->
                     <VBtn
-                      icon="tabler-arrow-back-up"
+                      icon
                       size="small"
                       variant="text"
+                      color="default"
                       :disabled="!editor"
                       @click="editor?.chain().focus().undo().run()"
                     >
+                      <VIcon icon="tabler-arrow-back-up" />
                       <VTooltip
                         activator="parent"
                         location="top"
@@ -527,12 +539,14 @@ onMounted(() => {
 
                     <!-- Rehacer -->
                     <VBtn
-                      icon="tabler-arrow-forward-up"
+                      icon
                       size="small"
                       variant="text"
+                      color="default"
                       :disabled="!editor"
                       @click="editor?.chain().focus().redo().run()"
                     >
+                      <VIcon icon="tabler-arrow-forward-up" />
                       <VTooltip
                         activator="parent"
                         location="top"
