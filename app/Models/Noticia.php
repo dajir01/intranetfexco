@@ -18,4 +18,16 @@ class Noticia extends Model
         'fecha',
         'imagen',
     ];
+
+    public function getImagenAttribute($value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        $path = parse_url($value, PHP_URL_PATH);
+        $filename = basename(is_string($path) ? $path : $value);
+
+        return $filename ? '/img/noticias/'.$filename : null;
+    }
 }

@@ -217,8 +217,8 @@ class NoticiaController extends Controller
             imagedestroy($src);
             imagedestroy($dst);
 
-            // Generar URL
-            $imageUrl = asset('img/noticias/'.$filename);
+            // Guardar una ruta local para evitar depender del dominio configurado en APP_URL.
+            $imageUrl = '/img/noticias/'.$filename;
 
             // Actualizar noticia con la URL de la imagen
             Noticia::where('id_noticia', $noticiaId)->update([
