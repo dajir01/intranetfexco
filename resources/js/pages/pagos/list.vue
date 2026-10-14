@@ -271,9 +271,42 @@ const resumenFeria = computed(() => {
   return { pagadas, parciales, pendientes }
 })
 
-const getCsrfToken = () => {
-  const token = document.querySelector('meta[name="csrf-token"]')
-  return token ? token.getAttribute('content') : ''
+const renovarCsrfToken = async () => {
+  const response = await fetch('/csrf-token', {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+
+  if (!response.ok)
+    throw new Error('No se pudo actualizar la seguridad de la sesión. Intente nuevamente.')
+
+  const data = await response.json()
+  if (!data?.token)
+    throw new Error('El servidor no pudo validar la sesión. Intente nuevamente.')
+
+  const meta = document.querySelector('meta[name="csrf-token"]')
+  if (meta)
+    meta.setAttribute('content', data.token)
+
+  return data.token
+}
+
+const enviarSolicitudPago = async (url, options) => {
+  const enviar = token => fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'X-CSRF-TOKEN': token,
+    },
+    credentials: 'same-origin',
+  })
+
+  let response = await enviar(await renovarCsrfToken())
+
+  if (response.status === 419)
+    response = await enviar(await renovarCsrfToken())
+
+  return response
 }
 
 const getPagoExtension = pago => {
@@ -346,14 +379,12 @@ const cerrarVerPagoAprobado = () => {
 
 const aprobarPago = async (pago) => {
   try {
-    const response = await fetch(`/pagos/${pago.id}/aprobar`, {
+    const response = await enviarSolicitudPago(`/pagos/${pago.id}/aprobar`, {
       method: 'POST',
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
         'Accept': 'application/json',
-        'X-CSRF-TOKEN': getCsrfToken(),
       },
-      credentials: 'same-origin',
     })
 
     if (!response.ok) {
@@ -375,21 +406,19 @@ const aprobarPago = async (pago) => {
     snackbar.value = {
       show: true,
       color: 'error',
-      text: 'Error de conexión al aprobar el pago',
+      text: err.message || 'Error de conexión al aprobar el pago',
     }
   }
 }
 
 const rechazarPago = async (pago) => {
   try {
-    const response = await fetch(`/pagos/${pago.id}/rechazar`, {
+    const response = await enviarSolicitudPago(`/pagos/${pago.id}/rechazar`, {
       method: 'POST',
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
         'Accept': 'application/json',
-        'X-CSRF-TOKEN': getCsrfToken(),
       },
-      credentials: 'same-origin',
     })
 
     if (!response.ok) {
@@ -411,7 +440,7 @@ const rechazarPago = async (pago) => {
     snackbar.value = {
       show: true,
       color: 'error',
-      text: 'Error de conexión al rechazar el pago',
+      text: err.message || 'Error de conexión al rechazar el pago',
     }
   }
 }
@@ -435,15 +464,13 @@ const subirPagoConfirmar = async () => {
   if (formPago.foto) formData.append('foto', formPago.foto)
 
   try {
-    const response = await fetch('/pagos', {
+    const response = await enviarSolicitudPago('/pagos', {
       method: 'POST',
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
         'Accept': 'application/json',
-        'X-CSRF-TOKEN': getCsrfToken(),
       },
       body: formData,
-      credentials: 'same-origin',
     })
 
     if (!response.ok) {
@@ -465,7 +492,7 @@ const subirPagoConfirmar = async () => {
     snackbar.value = {
       show: true,
       color: 'error',
-      text: 'Error de conexión al guardar el pago',
+      text: err.message || 'Error de conexión al guardar el pago',
     }
   }
 }
