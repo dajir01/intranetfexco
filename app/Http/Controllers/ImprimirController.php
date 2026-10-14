@@ -1625,7 +1625,7 @@ class ImprimirController extends Controller
             // Stands
             $stands = $c->numero_stand;
             $sector = substr($c->numero_stand, 0, 2);
-            for ($i = 2; $i < $c->total_stands; $i++) {
+            for ($i = 1; $i < $c->total_stands; $i++) {
                 $st_temp = DB::table('stands')
                     ->select('numero_stand')
                     ->where('id_stand', '=', $c->{'stand_' . ($i + 1)})
