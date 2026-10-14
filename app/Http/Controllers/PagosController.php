@@ -80,6 +80,7 @@ class PagosController extends Controller
                 ->where('id_feria', $idFeria)
                 ->where('stand_1', '>', 0) // Tiene al menos un stand
                 ->where('codigo_contrato', '>', 0) // Solo contratos generados
+                ->orderBy('codigo_contrato', 'asc')
                 ->orderBy('id_empresa', 'asc')
                 ->get();
 
