@@ -87,24 +87,39 @@ const loadNotifications = async () => {
   }
 }
 
-const playNotificationSound = () => {
+const playNotificationSound = async isPayment => {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext
     if (!AudioCtx) return
     const ctx = new AudioCtx()
-    const oscillator = ctx.createOscillator()
-    const gain = ctx.createGain()
 
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime)
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.01)
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25)
+    if (ctx.state === 'suspended')
+      await ctx.resume()
 
-    oscillator.connect(gain)
-    gain.connect(ctx.destination)
-    oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + 0.28)
+    const notes = isPayment
+      ? [{ frequency: 660, offset: 0, duration: 0.18 }, { frequency: 880, offset: 0.22, duration: 0.18 }, { frequency: 1100, offset: 0.44, duration: 0.3 }]
+      : [{ frequency: 880, offset: 0, duration: 0.25 }]
+
+    notes.forEach(({ frequency, offset, duration }) => {
+      const start = ctx.currentTime + offset
+      const oscillator = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      oscillator.type = isPayment ? 'triangle' : 'sine'
+      oscillator.frequency.setValueAtTime(frequency, start)
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.exponentialRampToValueAtTime(isPayment ? 0.2 : 0.08, start + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
+
+      oscillator.connect(gain)
+      gain.connect(ctx.destination)
+      oscillator.start(start)
+      oscillator.stop(start + duration + 0.02)
+    })
+
+    window.setTimeout(() => {
+      ctx.close().catch(() => {})
+    }, isPayment ? 900 : 400)
   } catch (e) {
     // El navegador puede bloquear audio sin interacción previa.
   }
@@ -193,8 +208,8 @@ const subscribeAdminChannel = () => {
   window.Echo
     .private('admin.notifications')
     .listen('.NotificacionAdminCreada', async event => {
+      playNotificationSound(event?.notificacion?.tipo === 'pago_creado')
       await loadNotifications()
-      playNotificationSound()
     })
 }
 
