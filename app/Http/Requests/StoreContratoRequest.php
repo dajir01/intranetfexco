@@ -35,7 +35,7 @@ class StoreContratoRequest extends FormRequest
             'nombre_empresa' => 'required|string|max:255',
             'direccion' => 'required|string|max:500',
             'nit' => 'required|string|max:50',
-            'telefono' => 'required|string|min:7|max:20',
+            'telefono' => 'required|string|min:7|max:50',
             'email' => 'nullable|email|max:255',
             'pais_id' => 'required|integer|exists:paises,id',
             'ciudad_id' => 'required|integer|exists:localidades,id',
@@ -62,12 +62,12 @@ class StoreContratoRequest extends FormRequest
             'nombre_gerente' => 'required|string|max:255',
             'ci_gerente' => 'required|string|max:50',
             'exp_ci_gerente' => 'required|string|in:Cb.,Lp.,Sc.,Or.,Tj.,Pt.,Ch.,Bn.,Pn.,Ex.',
-            'fono_gerente' => 'required|string|min:7|max:20',
+            'fono_gerente' => 'required|string|min:7|max:50',
             'cargo_gerente' => 'required|string|max:100',
             
             // Contacto
             'nombre_responsable' => 'required|string|max:255', // nombre_contacto en el frontend
-            'telefono_responsable' => 'required|string|min:7|max:20', // telefono_contacto en el frontend
+            'telefono_responsable' => 'required|string|min:7|max:50', // telefono_contacto en el frontend
             'email_representante' => 'nullable|email|max:255', // email_contacto en el frontend (opcional)
             
             // ========== SECCIÓN 3: DATOS DEL EVENTO ==========
@@ -123,6 +123,7 @@ class StoreContratoRequest extends FormRequest
             'nit.required' => 'El NIT es obligatorio.',
             'telefono.required' => 'El teléfono es obligatorio.',
             'telefono.min' => 'El teléfono debe tener al menos 7 dígitos.',
+            'telefono.max' => 'El teléfono no puede superar los 50 caracteres.',
             'email.email' => 'Debe ingresar un email válido.',
             'pais_id.required' => 'Debe seleccionar un país.',
             'pais_id.exists' => 'El país seleccionado no es válido.',
@@ -142,12 +143,14 @@ class StoreContratoRequest extends FormRequest
             'exp_ci_gerente.required' => 'Debe seleccionar el lugar de expedición del CI.',
             'fono_gerente.required' => 'El teléfono del representante es obligatorio.',
             'fono_gerente.min' => 'El teléfono del representante debe tener al menos 7 dígitos.',
+            'fono_gerente.max' => 'El teléfono del representante no puede superar los 50 caracteres.',
             'cargo_gerente.required' => 'El cargo del representante es obligatorio.',
             
             // Contacto
             'nombre_responsable.required' => 'El nombre del contacto es obligatorio.',
             'telefono_responsable.required' => 'El teléfono del contacto es obligatorio.',
             'telefono_responsable.min' => 'El teléfono del contacto debe tener al menos 7 dígitos.',
+            'telefono_responsable.max' => 'El teléfono del contacto no puede superar los 50 caracteres.',
             
             // Datos del evento
             'medio_comunicacion.required' => 'Debe seleccionar el medio por el cual fue aproximado.',
