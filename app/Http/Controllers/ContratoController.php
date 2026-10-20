@@ -1432,25 +1432,35 @@ class ContratoController extends Controller
     {
         try {
             $idFeria = (int) Contrato::query()->whereKey($id)->value('id_feria');
-            $request->validate([
-                'tipo_credenciales' => $idFeria >= 21
-                    ? ['required', 'in:0,1']
-                    : ['nullable', 'in:0,1'],
-                'email' => ['nullable', 'email', 'max:255'],
-                'email_representante' => ['nullable', 'email', 'max:255'],
-                'modo_precio' => ['nullable', 'in:m2,total'],
-                'precio_unit' => ['nullable', 'numeric', 'min:0.01'],
-                'precio_total' => ['nullable', 'numeric', 'min:0.01'],
-                'descuento' => ['required', 'numeric', 'min:0', 'max:100'],
-            ], [
+            $formRequest = new StoreContratoRequest();
+            $rules = array_merge(
+                StoreContratoRequest::rulesForFeria($idFeria),
+                [
+                    'tipo_credenciales' => $idFeria >= 21
+                        ? ['required', 'in:0,1']
+                        : ['nullable', 'in:0,1'],
+                    'modo_precio' => ['nullable', 'in:m2,total'],
+                    'precio_unit' => ['nullable', 'numeric', 'min:0.01'],
+                    'precio_total' => ['nullable', 'numeric', 'min:0.01'],
+                    'descuento' => ['required', 'numeric', 'min:0', 'max:100'],
+                ]
+            );
+            $messages = array_merge($formRequest->messages(), [
                 'tipo_credenciales.required' => 'Debe seleccionar el tipo de credencial (Física o Digital).',
                 'tipo_credenciales.in' => 'El tipo de credencial debe ser Física o Digital.',
             ]);
 
             $modoPrecio = $request->input('modo_precio', 'm2');
-            $request->validate($modoPrecio === 'total'
+            $rules = array_merge($rules, $modoPrecio === 'total'
                 ? ['precio_total' => ['required', 'numeric', 'min:0.01']]
                 : ['precio_unit' => ['required', 'numeric', 'min:0.01']]);
+
+            Validator::make(
+                $request->all(),
+                $rules,
+                $messages,
+                $formRequest->attributes()
+            )->validate();
 
             DB::beginTransaction();
 
@@ -1461,6 +1471,12 @@ class ContratoController extends Controller
             $metrajeTotal = (float) $contrato->metraje_total;
             if (!is_finite($metrajeTotal) || $metrajeTotal <= 0) {
                 DB::rollBack();
+
+                Log::warning('No se pudo guardar el formulario: el contrato tiene un metraje inválido.', [
+                    'id_contrato' => $id,
+                    'user_id' => Auth::id(),
+                    'metraje_total' => $contrato->metraje_total,
+                ]);
 
                 return response()->json([
                     'success' => false,
@@ -1716,17 +1732,31 @@ class ContratoController extends Controller
                 DB::rollBack();
             }
 
+            Log::warning('Falló la validación del formulario autenticado de contrato.', [
+                'id_contrato' => $id,
+                'user_id' => Auth::id(),
+                'errors' => $e->errors(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Los datos enviados no son válidos.',
+                'message' => 'Revise los campos indicados: ' . implode(' ', collect($e->errors())->flatten()->all()),
                 'errors' => $e->errors(),
             ], 422);
         } catch (\Exception $e) {
-            DB::rollBack();
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
+            Log::error('Error al guardar el formulario autenticado de contrato.', [
+                'id_contrato' => $id,
+                'user_id' => Auth::id(),
+                'exception' => $e->getMessage(),
+            ]);
             
             return response()->json([
                 'success' => false,
-                'message' => 'Error al guardar el contrato: ' . $e->getMessage(),
+                'message' => 'No se pudo guardar el contrato. Revise los datos e intente nuevamente.',
             ], 500);
         }
     }

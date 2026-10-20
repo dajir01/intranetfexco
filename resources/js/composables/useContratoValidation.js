@@ -135,6 +135,85 @@ export function useContratoValidation() {
     return `Faltan completar ${errores.length} campos obligatorios. Por favor, revise el formulario.`
   }
 
+  const formatearErroresCliente = (errores = []) => errores.flatMap(error => {
+    const { id, errorMessages = [] } = error
+    const input = typeof document !== 'undefined' && id ? document.getElementById(id) : null
+    const label = input?.getAttribute('aria-label')
+      || input?.closest('.v-input')?.querySelector('.v-label')?.textContent?.replace(/\s*\*$/, '').trim()
+
+    return errorMessages.map(message => {
+      return label ? `${label}: ${message}` : message
+    })
+  })
+
+  const formatearErroresServidor = (errores = {}) => {
+    const nombresCampos = new Map([
+      ['actividad_principal', 'Actividad principal'],
+      ['aniversario', 'Aniversario'],
+      ['cargo_gerente', 'Cargo del representante'],
+      ['ciudad_id', 'Ciudad'],
+      ['ci_gerente', 'Documento del representante'],
+      ['cluster', 'Categoría de empresa'],
+      ['como_entero', 'Cómo se enteró de la feria'],
+      ['descuento', 'Descuento'],
+      ['direccion', 'Dirección'],
+      ['email', 'Correo de la empresa'],
+      ['email_representante', 'Correo del contacto'],
+      ['exp_ci_gerente', 'Expedición del documento'],
+      ['fax', 'Fax'],
+      ['fecha_final', 'Fecha del pago final'],
+      ['fecha_inicial', 'Fecha del pago inicial'],
+      ['fecha_nr_escritura', 'Fecha de escritura'],
+      ['fecha_nr_poder', 'Fecha de poder'],
+      ['fono_gerente', 'Teléfono del representante'],
+      ['marca_principal', 'Cantidad de marcas nacionales'],
+      ['marcas_secundarios', 'Cantidad de marcas multinacionales'],
+      ['matricula', 'Matrícula'],
+      ['medio_comunicacion', 'Medio de comunicación'],
+      ['mn', 'Marcas nacionales'],
+      ['modo_precio', 'Modo de precio'],
+      ['monto_inicial', 'Monto inicial'],
+      ['nombre_empresa', 'Nombre de la empresa'],
+      ['nombre_gerente', 'Nombre del representante'],
+      ['nombre_responsable', 'Nombre del contacto'],
+      ['nit', 'NIT'],
+      ['nr_escritura', 'Número de escritura'],
+      ['nr_notaria', 'Número de notaría'],
+      ['nr_poder', 'Número de poder'],
+      ['otro_rubro', 'Otros rubros adicionales'],
+      ['pais_id', 'País'],
+      ['pais_mu', 'País de marca multinacional'],
+      ['pais_pp', 'País de marca internacional'],
+      ['pais_principal', 'Cantidad de marcas internacionales'],
+      ['perfil_visitante', 'Perfil del visitante'],
+      ['pp', 'Marcas internacionales'],
+      ['productos', 'Productos o servicios'],
+      ['precio_total', 'Precio total'],
+      ['precio_unit', 'Precio por metro cuadrado'],
+      ['rubro', 'Rubro'],
+      ['subrubro', 'Subrubro'],
+      ['telefono', 'Teléfono de la empresa'],
+      ['telefono_responsable', 'Teléfono del contacto'],
+      ['tipo_credenciales', 'Tipo de credencial'],
+      ['tipo_desc', 'Tipo de descuento'],
+      ['tipo_expositor', 'Tipo de expositor'],
+      ['web', 'Sitio web'],
+      ['mu', 'Marcas multinacionales'],
+    ])
+
+    return Object.entries(errores).flatMap(([campo, mensajes]) => {
+      const campoBase = campo.replace(/\.\d+$/, '')
+      const indice = campo.match(/\.(\d+)$/)?.[1]
+      const label = nombresCampos.get(campoBase) || campoBase.replace(/_/g, ' ')
+      const nombreCampo = indice ? `${label} (elemento ${Number(indice) + 1})` : label
+
+      return (Array.isArray(mensajes) ? mensajes : [mensajes])
+        .map(message => {
+          return `${nombreCampo}: ${message}`
+        })
+    })
+  }
+
   return {
     // Reglas individuales
     requiredRule,
@@ -153,6 +232,8 @@ export function useContratoValidation() {
     
     // Validación completa
     validarFormularioCompleto,
-    generarMensajeError
+    generarMensajeError,
+    formatearErroresCliente,
+    formatearErroresServidor,
   }
 }

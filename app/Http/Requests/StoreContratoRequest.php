@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Contrato;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Log;
 
 class StoreContratoRequest extends FormRequest
 {
@@ -26,6 +28,17 @@ class StoreContratoRequest extends FormRequest
         $idFeria = $idContrato
             ? Contrato::query()->whereKey($idContrato)->value('id_feria')
             : null;
+
+        return self::rulesForFeria($idFeria);
+    }
+
+    /**
+     * Reglas compartidas para formularios públicos y autenticados.
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
+    public static function rulesForFeria(?int $idFeria): array
+    {
         $reglaTipoCredenciales = (int) $idFeria >= 21
             ? 'required|in:0,1'
             : 'nullable|in:0,1';
@@ -107,6 +120,17 @@ class StoreContratoRequest extends FormRequest
             'fecha_inicial' => 'nullable|date',
             'fecha_final' => 'nullable|date',
         ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        Log::warning('Falló la validación del formulario público de contrato.', [
+            'id_contrato' => $this->route('id_contrato'),
+            'user_id' => $this->user()?->getAuthIdentifier(),
+            'errors' => $validator->errors()->toArray(),
+        ]);
+
+        parent::failedValidation($validator);
     }
 
     /**

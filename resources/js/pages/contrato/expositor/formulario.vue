@@ -18,7 +18,9 @@ const {
   autocompleteIdRule,
   textareaRequiredRule,
   validarFormularioCompleto,
-  generarMensajeError
+  generarMensajeError,
+  formatearErroresCliente,
+  formatearErroresServidor,
 } = useContratoValidation()
 
 const formularioRef = ref(null)
@@ -576,10 +578,13 @@ const guardarInformacion = async () => {
   try {
     // ==================== VALIDACIÓN ANTES DE GUARDAR ====================
     if (formularioRef.value) {
-      const { valid } = await formularioRef.value.validate()
+      const { valid, errors } = await formularioRef.value.validate()
       
       if (!valid) {
-        mostrarNotificacion('Por favor, complete todos los campos obligatorios marcados con *', 'error')
+        const mensajes = formatearErroresCliente(errors)
+        mostrarNotificacion(mensajes.length
+          ? mensajes.join(' | ')
+          : 'Por favor, corrija los campos marcados con error.', 'error')
         // Hacer scroll al primer error
         const firstError = document.querySelector('.v-input--error')
         if (firstError) {
@@ -645,14 +650,16 @@ const guardarInformacion = async () => {
       // Mostrar notificación
       mostrarNotificacion('¡Formulario guardado exitosamente!', 'success')
     } else {
-      mostrarNotificacion(response.data.message || 'Error al guardar el formulario', 'error')
+      const errores = formatearErroresServidor(response.data.errors)
+      mostrarNotificacion(errores.length
+        ? errores.join(' | ')
+        : response.data.message || 'Error al guardar el formulario', 'error')
     }
   } catch (err) {
-    console.error('Error al guardar:', err)
-    
-    const mensaje = err.response?.data?.message || 
-                    err.message || 
-                    'Error desconocido al guardar'
+    const errores = formatearErroresServidor(err.response?.data?.errors)
+    const mensaje = errores.length
+      ? errores.join(' | ')
+      : err.response?.data?.message || err.message || 'Error desconocido al guardar'
     
     mostrarNotificacion(mensaje, 'error')
   } finally {

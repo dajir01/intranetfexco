@@ -32,7 +32,9 @@ const {
   autocompleteIdRule,
   textareaRequiredRule,
   validarFormularioCompleto,
-  generarMensajeError
+  generarMensajeError,
+  formatearErroresCliente,
+  formatearErroresServidor,
 } = useContratoValidation()
 
 const formularioRef = ref(null)
@@ -907,10 +909,13 @@ const guardarContrato = async () => {
   try {
     // ==================== VALIDACIÓN ANTES DE GUARDAR ====================
     if (formularioRef.value) {
-      const { valid } = await formularioRef.value.validate()
+      const { valid, errors } = await formularioRef.value.validate()
       
       if (!valid) {
-        mostrarNotificacion('Por favor, complete todos los campos obligatorios marcados con *', 'error')
+        const mensajes = formatearErroresCliente(errors)
+        mostrarNotificacion(mensajes.length
+          ? mensajes.join(' | ')
+          : 'Por favor, corrija los campos marcados con error.', 'error')
         // Hacer scroll al primer error
         const firstError = document.querySelector('.v-input--error')
         if (firstError) {
@@ -1039,7 +1044,11 @@ const guardarContrato = async () => {
     if (err.name === 'AbortError') {
       mostrarNotificacion('Timeout: El servidor tardó demasiado tiempo en responder', 'error')
     } else if (err.response) {
-      mostrarNotificacion('Error ' + err.response.status + ': ' + (err.response.data?.message || err.message), 'error')
+      const errores = formatearErroresServidor(err.response.data?.errors)
+      const mensaje = errores.length
+        ? errores.join(' | ')
+        : err.response.data?.message || err.message
+      mostrarNotificacion('Error ' + err.response.status + ': ' + mensaje, 'error')
     } else if (err.request) {
       mostrarNotificacion('Error: No hubo respuesta del servidor', 'error')
     } else {
