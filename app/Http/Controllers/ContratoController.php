@@ -10,7 +10,6 @@ use App\Models\Ocupacion;
 use App\Models\Pabellon;
 use App\Models\Stand;
 use App\Models\Backedempresa;
-use App\Models\Credencial;
 use App\Http\Requests\StoreContratoRequest;
 use App\Events\ContratoActualizado;
 use Illuminate\Http\Request;
@@ -937,9 +936,9 @@ class ContratoController extends Controller
 
     /**
      * Eliminar reserva o limpiar contrato existente.
-     * - Si codigo_contrato == 0: elimina ocupaciones, visitantes y el contrato.
-     * - Si codigo_contrato > 0: elimina ocupaciones, libera credenciales (según feria),
-     *   resetea stands y metrajes, y mantiene el registro del contrato.
+     * - Si codigo_contrato == 0: elimina ocupaciones y la reserva.
+     * - Si codigo_contrato > 0: conserva el contrato y sus credenciales, libera los stands
+     *   e inhabilita las credenciales emitidas.
      */
     public function eliminarReserva($id)
     {
@@ -949,39 +948,24 @@ class ContratoController extends Controller
 
             // 1) Eliminar ocupaciones actuales del contrato
             Ocupacion::where('id_contrato', $contrato->id_contrato)->delete();
-            
-            // Disparar evento de tiempo real (contrato eliminado)
-            ContratoActualizado::dispatch(
-                $contrato->id_feria,
-                $contrato->id_contrato,
-                'delete',
-                ['id_empresa' => $contrato->id_empresa]
-            );
 
             // Diferenciar por codigo_contrato
             $esContratoGenerado = (int)($contrato->codigo_contrato ?? 0) > 0;
 
             if ($esContratoGenerado) {
-                // 2) Obtener código de feria para decidir liberación de credenciales
-                $feria = Feria::find($contrato->id_feria);
-                $codigoFeria = $feria ? ($feria->codigo_contrato ?? '') : '';
-
-                // 3) Liberar y eliminar credenciales (sin importar tipo de feria)
+                // Inhabilitar credenciales emitidas sin borrar su historial.
                 $limite = max(0, (int)($contrato->nro_credenciales ?? 0));
                 if ($limite > 0) {
-                    $credenciales = Credencial::where('id_empresa', $contrato->id_empresa)
+                    DB::table('credenciales')
+                        ->where('id_empresa', $contrato->id_empresa)
                         ->where('tipo_credencial', 1)
                         ->where('estado_credencial', '>=', 1)
                         ->where('id_feria', $contrato->id_feria)
                         ->limit($limite)
-                        ->get();
-
-                    foreach ($credenciales as $credencial) {
-                        $credencial->delete();
-                    }
+                        ->update(['estado_credencial' => 0]);
                 }
 
-                // 4) Resetear stands y métricas del contrato
+                // Marcar el contrato como anulado y liberar sus stands.
                 for ($i = 1; $i <= 12; $i++) {
                     $campo = "stand_{$i}";
                     $contrato->$campo = 0;
@@ -992,6 +976,27 @@ class ContratoController extends Controller
                 $contrato->save();
 
                 DB::commit();
+
+                try {
+                    ContratoActualizado::dispatch(
+                        $contrato->id_feria,
+                        $contrato->id_contrato,
+                        'update',
+                        [
+                            'id_empresa' => $contrato->id_empresa,
+                            'codigo_contrato' => $contrato->codigo_contrato,
+                            'estado_reserva' => $contrato->estado_reserva,
+                            'total_stands' => 0,
+                            'anulado' => true,
+                        ]
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('No se pudo publicar la anulación del contrato en tiempo real.', [
+                        'id_contrato' => $contrato->id_contrato,
+                        'exception' => $e->getMessage(),
+                    ]);
+                }
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Contrato anulado correctamente',
@@ -1004,6 +1009,21 @@ class ContratoController extends Controller
             $contrato->delete();
 
             DB::commit();
+
+            try {
+                ContratoActualizado::dispatch(
+                    $contrato->id_feria,
+                    $contrato->id_contrato,
+                    'delete',
+                    ['id_empresa' => $contrato->id_empresa]
+                );
+            } catch (\Throwable $e) {
+                Log::warning('No se pudo publicar la eliminación de la reserva en tiempo real.', [
+                    'id_contrato' => $contrato->id_contrato,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Reserva eliminada correctamente',
