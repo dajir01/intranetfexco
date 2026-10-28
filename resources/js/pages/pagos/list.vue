@@ -40,6 +40,7 @@ const tiposPago = ref([
   { value: 1, title: 'Efectivo' },
   { value: 2, title: 'Cheque' },
 ])
+
 const formPago = reactive({
   id_empresa: null,
   id_feria: null,
@@ -475,7 +476,12 @@ const subirPagoConfirmar = async () => {
 
     if (!response.ok) {
       const errorJson = await response.json().catch(() => null)
-      const message = errorJson?.message || 'Error al guardar el pago'
+      const errores = errorJson?.errors
+        ? Object.values(errorJson.errors).flat().filter(Boolean)
+        : []
+      const message = errores.length
+        ? errores.join(' ')
+        : errorJson?.message || 'Error al guardar el pago'
       snackbar.value = { show: true, color: 'error', text: message }
       return
     }

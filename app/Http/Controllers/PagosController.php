@@ -14,7 +14,10 @@ use App\Support\AreaPermissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class PagosController extends Controller
 {
@@ -252,13 +255,70 @@ class PagosController extends Controller
             throw new \Symfony\Component\HttpKernel\Exception\HttpException(403, 'No autorizado para crear pagos');
         }
 
-        $request->validate([
-            'id_empresa' => 'required',
-            'id_feria' => 'required',
-            'monto' => 'required|numeric|min:0',
-            'tipo_pago' => 'required',
-            'foto' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:10240',
-        ]);
+        try {
+            $validator = Validator::make($request->all(), [
+                'id_empresa' => ['required', 'integer', 'exists:empresas,id_empresa'],
+                'id_feria' => ['required', 'integer', 'exists:eventos,id_feria'],
+                'monto' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+                'tipo_pago' => ['required', 'integer', 'in:0,1,2'],
+                'foto' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+            ], [
+                'id_empresa.required' => 'Debe seleccionar una empresa.',
+                'id_empresa.exists' => 'La empresa seleccionada no existe.',
+                'id_feria.required' => 'Debe seleccionar una feria.',
+                'id_feria.exists' => 'La feria seleccionada no existe.',
+                'monto.required' => 'Debe ingresar el monto del pago.',
+                'monto.gt' => 'El monto del pago debe ser mayor que cero.',
+                'monto.decimal' => 'El monto puede tener como máximo dos decimales.',
+                'tipo_pago.required' => 'Debe seleccionar el tipo de pago.',
+                'tipo_pago.in' => 'El tipo de pago seleccionado no es válido.',
+                'foto.file' => 'El comprobante no llegó como un archivo válido.',
+                'foto.mimes' => 'El comprobante debe ser JPG, PNG o PDF.',
+                'foto.max' => 'El comprobante no puede superar 10 MB.',
+                'foto.uploaded' => 'El comprobante no pudo subirse. Verifique el tamaño o el límite de carga del servidor.',
+            ], [
+                'id_empresa' => 'empresa',
+                'id_feria' => 'feria',
+                'monto' => 'monto',
+                'tipo_pago' => 'tipo de pago',
+                'foto' => 'comprobante',
+            ]);
+
+            $tipoPago = (int) $request->input('tipo_pago');
+            $upload = $request->files->get('foto');
+
+            $validator->after(function ($validation) use ($request, $tipoPago, $upload): void {
+                if (in_array($tipoPago, [0, 2], true) && ! $request->hasFile('foto')) {
+                    $uploadError = $upload instanceof \Illuminate\Http\UploadedFile
+                        ? $this->descripcionErrorUpload($upload->getError())
+                        : null;
+
+                    $validation->errors()->add(
+                        'foto',
+                        $uploadError
+                            ? "El comprobante no pudo subirse: {$uploadError}"
+                            : 'Debe adjuntar el comprobante para Depósito o Cheque.',
+                    );
+                }
+            });
+
+            $validated = $validator->validate();
+        } catch (ValidationException $e) {
+            $this->logPagoError('Pago rechazado por validación', $request, $e, [
+                'validation_errors' => $e->errors(),
+                'upload' => $this->diagnosticoUpload($request),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Revise los datos del pago antes de continuar.',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Throwable $e) {
+            $this->logPagoError('Error inesperado al validar el pago', $request, $e);
+
+            throw $e;
+        }
 
         $usuarioActual = $request->user();
         $foto = $request->file('foto');
@@ -316,9 +376,21 @@ class PagosController extends Controller
                 Storage::disk('local')->delete(str_replace('img/', '', $rutaFoto));
             }
 
+            $this->logPagoError('Error al registrar el pago', $request, $e, [
+                'phase' => 'transaction',
+                'upload' => $this->diagnosticoUpload($request),
+                'payment' => [
+                    'id_empresa' => $request->input('id_empresa'),
+                    'id_feria' => $request->input('id_feria'),
+                    'monto' => $request->input('monto'),
+                    'tipo_pago' => $request->input('tipo_pago'),
+                    'archivo_guardado' => (bool) $rutaFoto,
+                ],
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Error al registrar el pago: ' . $e->getMessage(),
+                'message' => 'No fue posible registrar el pago. El error quedó registrado para revisión técnica.',
             ], 500);
         }
 
@@ -1074,6 +1146,66 @@ class PagosController extends Controller
         }
 
         return '';
+    }
+
+    private function descripcionErrorUpload(int $errorCode): ?string
+    {
+        return match ($errorCode) {
+            UPLOAD_ERR_INI_SIZE => 'el archivo supera upload_max_filesize.',
+            UPLOAD_ERR_FORM_SIZE => 'el archivo supera el límite declarado por el formulario.',
+            UPLOAD_ERR_PARTIAL => 'la subida terminó antes de recibir el archivo completo.',
+            UPLOAD_ERR_NO_FILE => 'no se recibió ningún archivo.',
+            UPLOAD_ERR_NO_TMP_DIR => 'PHP no tiene una carpeta temporal disponible.',
+            UPLOAD_ERR_CANT_WRITE => 'PHP no pudo escribir el archivo temporal.',
+            UPLOAD_ERR_EXTENSION => 'una extensión de PHP bloqueó la subida.',
+            default => null,
+        };
+    }
+
+    private function diagnosticoUpload(Request $request): array
+    {
+        $upload = $request->files->get('foto');
+        $uploadError = $upload instanceof \Illuminate\Http\UploadedFile
+            ? $upload->getError()
+            : ($request->has('foto') ? UPLOAD_ERR_NO_FILE : null);
+
+        $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
+
+        return [
+            'present_in_request' => $request->has('foto'),
+            'upload_error_code' => $uploadError,
+            'upload_error' => $uploadError !== null
+                ? $this->descripcionErrorUpload((int) $uploadError)
+                : null,
+            'php_upload_max_filesize' => ini_get('upload_max_filesize'),
+            'php_post_max_size' => ini_get('post_max_size'),
+            'php_file_uploads' => ini_get('file_uploads'),
+            'php_upload_tmp_dir' => ini_get('upload_tmp_dir') ?: sys_get_temp_dir(),
+            'content_length_bytes' => $contentLength,
+            'uploaded_file_name' => $upload instanceof \Illuminate\Http\UploadedFile
+                ? $upload->getClientOriginalName()
+                : null,
+            'uploaded_size_bytes' => $upload instanceof \Illuminate\Http\UploadedFile
+                ? $upload->getSize()
+                : null,
+        ];
+    }
+
+    private function logPagoError(string $message, Request $request, \Throwable $exception, array $context = []): void
+    {
+        Log::error($message, $context + [
+            'exception' => $exception::class,
+            'error' => $exception->getMessage(),
+            'file' => $exception->getFile(),
+            'line' => $exception->getLine(),
+            'request_id' => (string) $request->headers->get('X-Request-ID', ''),
+            'user_id' => (int) optional($request->user())->id_usuario,
+            'route' => $request->route()?->getName(),
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'ip' => $request->ip(),
+            'trace' => $exception->getTraceAsString(),
+        ]);
     }
 
     /**
