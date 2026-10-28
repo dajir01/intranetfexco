@@ -28,6 +28,9 @@ const itemsPerPage = ref(defaultItemsPerPage)
 const sortBy = ref([{ key: 'empresa', order: 'asc' }])
 const search = ref('')
 
+const MAX_PAGO_ARCHIVO_BYTES = 10 * 1024 * 1024
+const MAX_PAGO_ARCHIVO_MB = MAX_PAGO_ARCHIVO_BYTES / (1024 * 1024)
+
 // Estado del dialog Subir Pago
 const dialogPago = ref(false)
 const empresaSeleccionada = ref({})
@@ -457,6 +460,15 @@ const subirPagoConfirmar = async () => {
     return
   }
 
+  if (formPago.foto && formPago.foto.size > MAX_PAGO_ARCHIVO_BYTES) {
+    snackbar.value = {
+      show: true,
+      color: 'error',
+      text: `El comprobante pesa ${(formPago.foto.size / (1024 * 1024)).toFixed(2)} MB. El máximo permitido es ${MAX_PAGO_ARCHIVO_MB} MB.`,
+    }
+    return
+  }
+
   const formData = new FormData()
   formData.append('id_empresa', formPago.id_empresa ?? '')
   formData.append('id_feria', formPago.id_feria ?? '')
@@ -475,6 +487,15 @@ const subirPagoConfirmar = async () => {
     })
 
     if (!response.ok) {
+      if (response.status === 413) {
+        snackbar.value = {
+          show: true,
+          color: 'error',
+          text: `El servidor rechazó el comprobante porque supera el límite permitido. La aplicación acepta máximo ${MAX_PAGO_ARCHIVO_MB} MB; revise también el límite de carga de Nginx.`,
+        }
+        return
+      }
+
       const errorJson = await response.json().catch(() => null)
       const errores = errorJson?.errors
         ? Object.values(errorJson.errors).flat().filter(Boolean)
@@ -1125,7 +1146,7 @@ const snackbar = ref({ show: false, color: 'info', text: '' })
                     outlined
                   />
                   <span class="text-caption text-muted">
-                    Formatos permitidos: JPG, PNG, PDF
+                    Formatos permitidos: JPG, PNG, PDF. Tamaño máximo: {{ MAX_PAGO_ARCHIVO_MB }} MB.
                   </span>
                 </div>
               </VCol>
