@@ -132,7 +132,8 @@ const MODULE_GROUPS = [
   { key: 'solicitudes', title: 'Solicitudes', moduleKeys: ['solicitudes'] },
   { key: 'correspondencia', title: 'Correspondencia', moduleKeys: ['correspondencia'] },
   { key: 'usuarios', title: 'Usuarios', moduleKeys: ['usuarios'] },
-  { key: 'configuracion', title: 'Configuración', moduleKeys: ['auditoria_logs', 'notificaciones'] },
+  { key: 'configuracion', title: 'Configuración', moduleKeys: ['notificaciones'] },
+  { key: 'auditoria', title: 'Auditoría del sistema', moduleKeys: ['auditoria_logs'] },
   { key: 'inicio', title: 'Inicio', moduleKeys: ['home.ferias'] },
 ]
 
