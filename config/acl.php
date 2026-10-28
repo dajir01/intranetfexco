@@ -85,6 +85,8 @@ return [
         ['module' => 'notificaciones', 'action' => 'crear'],
         ['module' => 'notificaciones', 'action' => 'editar'],
 
+        ['module' => 'auditoria_logs', 'action' => 'ver'],
+
         ['module' => 'biometrico', 'action' => 'ver'],
         ['module' => 'biometrico', 'action' => 'importar'],
 
@@ -256,6 +258,8 @@ return [
         'noticias.create' => 'noticias.crear',
         'noticias.update' => 'noticias.editar',
         'noticias.delete' => 'noticias.eliminar',
+
+        'auditoria.logs.view' => 'auditoria_logs.ver',
 
         'notificaciones.view' => 'notificaciones.ver',
         'notificaciones.create' => 'notificaciones.crear',

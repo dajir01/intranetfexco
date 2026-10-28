@@ -54,6 +54,7 @@ const MODULE_ORDER = [
   'pagos',
   'noticias',
   'notificaciones',
+  'auditoria_logs',
   'biometrico',
   'controlventas',
   'empresas',
@@ -93,6 +94,7 @@ const MODULE_LABELS = {
   pagos: 'Pagos',
   noticias: 'Noticias',
   notificaciones: 'Notificaciones por correo',
+  auditoria_logs: 'Auditoría de registros',
   biometrico: 'Biométrico',
   controlventas: 'Control de Ventas',
   empresas: 'Empresas',
@@ -130,7 +132,7 @@ const MODULE_GROUPS = [
   { key: 'solicitudes', title: 'Solicitudes', moduleKeys: ['solicitudes'] },
   { key: 'correspondencia', title: 'Correspondencia', moduleKeys: ['correspondencia'] },
   { key: 'usuarios', title: 'Usuarios', moduleKeys: ['usuarios'] },
-  { key: 'configuracion', title: 'Configuración', moduleKeys: ['notificaciones'] },
+  { key: 'configuracion', title: 'Configuración', moduleKeys: ['auditoria_logs', 'notificaciones'] },
   { key: 'inicio', title: 'Inicio', moduleKeys: ['home.ferias'] },
 ]
 
@@ -211,6 +213,7 @@ const ACTION_LABELS = {
   'notificaciones.ver': 'Ver configuración',
   'notificaciones.crear': 'Crear configuración',
   'notificaciones.editar': 'Editar configuración',
+  'auditoria_logs.ver': 'Consultar registros de auditoría',
   'solicitudes.ver': 'Ver solicitudes',
   'solicitudes.crear': 'Crear solicitudes',
   'solicitudes.editar': 'Editar solicitudes',

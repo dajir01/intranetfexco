@@ -5,6 +5,7 @@ use App\Http\Controllers\HorarioBiometricoController;
 use App\Http\Controllers\FeriaController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\InventarioController;
+use App\Http\Controllers\LaravelLogController;
 use App\Http\Controllers\PabellonController;
 use App\Http\Controllers\StandController;
 use App\Http\Controllers\UsuarioController;
@@ -199,6 +200,12 @@ Route::middleware('auth')->group(function () {
     Route::patch('/api/notificaciones/configuraciones/{eventKey}/toggle', [NotificationConfigurationController::class, 'toggle'])->middleware('permission:notificaciones.editar');
     Route::get('/api/notificaciones/areas', [NotificationConfigurationController::class, 'areas'])->middleware('permission:notificaciones.ver');
     Route::get('/api/notificaciones/usuarios', [NotificationConfigurationController::class, 'users'])->middleware('permission:notificaciones.ver');
+
+    // Auditoría técnica de los registros de Laravel
+    Route::middleware('permission:auditoria_logs.ver')->prefix('/api/auditoria/logs')->group(function () {
+        Route::get('/', [LaravelLogController::class, 'files']);
+        Route::get('/{filename}', [LaravelLogController::class, 'entries'])->where('filename', 'laravel(?:-[0-9]{4}-[0-9]{2}-[0-9]{2})?\.log');
+    });
 
     // ACL granular por usuario (nuevo sistema con fallback legado)
     Route::get('/permissions', [PermissionController::class, 'index'])->middleware('permission:usuarios.gestionar_permisos');

@@ -130,6 +130,9 @@ return [
             'areas' => ['sistemas', 'administracion', 'gerencia', 'auditoria', 'comercial'],
         ],
 
+        // Registros técnicos para auditoría (Sistemas y Auditoría)
+        'auditoria.logs.view' => ['admin', 'auditoria'],
+
         // Noticias (Sistemas, Gerencia y Comunicacion)
         'noticias.view' => [
             'areas' => ['sistemas', 'gerencia', 'comunicacion'],
