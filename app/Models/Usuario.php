@@ -143,6 +143,11 @@ class Usuario extends Authenticatable
 
         $aliases = [$permission];
 
+        if ($permission === 'contratos.view') {
+            $aliases[] = 'contratos.print';
+            $aliases[] = 'contratos.imprimir';
+        }
+
         if (isset($legacyToGranular[$permission])) {
             $aliases[] = self::normalizePermissionName((string) $legacyToGranular[$permission]);
         }

@@ -72,8 +72,17 @@ const GRANULAR_TO_LEGACY = Object.fromEntries(
   Object.entries(LEGACY_TO_GRANULAR).map(([legacy, granular]) => [granular, legacy]),
 )
 
+const ABILITY_IMPLICATIONS = {
+  'contratos.view': ['contratos.print', 'contratos.imprimir'],
+}
+
 export const canUser = (user, ability) => {
-  const aliases = [ability, LEGACY_TO_GRANULAR[ability], GRANULAR_TO_LEGACY[ability]]
+  const aliases = [
+    ability,
+    LEGACY_TO_GRANULAR[ability],
+    GRANULAR_TO_LEGACY[ability],
+    ...ABILITY_IMPLICATIONS[ability] || [],
+  ]
     .filter(Boolean)
 
   const directPermissions = user?.permissions
