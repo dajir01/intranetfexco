@@ -5,6 +5,12 @@ import { useAuthStore } from '@/stores/auth'
 const auth = useAuthStore()
 const notifications = ref([])
 const loading = ref(false)
+const unreadCount = ref(0)
+const isBellAlerting = ref(false)
+const incomingNotificationVisible = ref(false)
+const incomingNotificationTitle = ref('')
+const incomingNotificationMessage = ref('')
+let bellAlertTimeout = null
 
 const canReceiveAdminNotifications = computed(() => {
   const user = auth.user
@@ -67,6 +73,7 @@ const toUiNotification = item => {
 const loadNotifications = async () => {
   if (!canReceiveAdminNotifications.value) {
     notifications.value = []
+    unreadCount.value = 0
 
     return
   }
@@ -82,9 +89,20 @@ const loadNotifications = async () => {
     if (!response.ok || !json?.success) return
 
     notifications.value = (json.data?.items || []).map(toUiNotification)
+    unreadCount.value = Number(json.data?.unread) || 0
   } finally {
     loading.value = false
   }
+}
+
+const adjustUnreadCount = (notificationIds, isRead) => {
+  const ids = new Set(notificationIds)
+
+  const changedCount = notifications.value.filter(item => (
+    ids.has(item.id) && item.isSeen !== isRead
+  )).length
+
+  unreadCount.value = Math.max(0, unreadCount.value + (isRead ? -changedCount : changedCount))
 }
 
 const playNotificationSound = async isPayment => {
@@ -128,6 +146,7 @@ const playNotificationSound = async isPayment => {
 const markRead = async notificationIds => {
   const ids = Array.isArray(notificationIds) ? notificationIds : [notificationIds]
 
+  adjustUnreadCount(ids, true)
   await Promise.all(ids.map(id => fetch(`/notificaciones/admin/${id}/leer`, {
     method: 'PATCH',
     headers: {
@@ -146,6 +165,7 @@ const markRead = async notificationIds => {
 const markUnRead = async notificationIds => {
   const ids = Array.isArray(notificationIds) ? notificationIds : [notificationIds]
 
+  adjustUnreadCount(ids, false)
   await Promise.all(ids.map(id => fetch(`/notificaciones/admin/${id}/no-leer`, {
     method: 'PATCH',
     headers: {
@@ -202,12 +222,39 @@ const handleNotificationClick = async notification => {
   }
 }
 
+const alertIncomingNotification = notification => {
+  const payload = notification?.payload || {}
+  const isPayment = notification?.tipo === 'pago_creado'
+
+  const amount = payload.monto !== undefined && payload.monto !== null
+    ? ` · Bs ${Number(payload.monto).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : ''
+
+  incomingNotificationTitle.value = isPayment
+    ? 'Nuevo pago registrado'
+    : notification?.titulo || 'Nueva notificación'
+  incomingNotificationMessage.value = isPayment
+    ? `${payload.empresa || notification?.mensaje || 'Se registró un pago'}${amount}`
+    : notification?.mensaje || 'Tienes una nueva notificación.'
+  incomingNotificationVisible.value = true
+  isBellAlerting.value = true
+
+  if (bellAlertTimeout)
+    window.clearTimeout(bellAlertTimeout)
+
+  bellAlertTimeout = window.setTimeout(() => {
+    isBellAlerting.value = false
+    bellAlertTimeout = null
+  }, 3000)
+}
+
 const subscribeAdminChannel = () => {
   if (!canReceiveAdminNotifications.value || !window.Echo) return
 
   window.Echo
     .private('admin.notifications')
     .listen('.NotificacionAdminCreada', async event => {
+      alertIncomingNotification(event?.notificacion)
       playNotificationSound(event?.notificacion?.tipo === 'pago_creado')
       await loadNotifications()
     })
@@ -219,6 +266,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (bellAlertTimeout)
+    window.clearTimeout(bellAlertTimeout)
+
   if (window.Echo) {
     window.Echo.leaveChannel('private-admin.notifications')
   }
@@ -229,10 +279,23 @@ onUnmounted(() => {
   <Notifications
     v-if="canReceiveAdminNotifications"
     :notifications="visibleNotifications"
+    :unread-count="unreadCount"
+    :is-alerting="isBellAlerting"
     :is-loading="loading"
     @remove="dismissNotification"
     @read="markRead"
     @unread="markUnRead"
     @click:notification="handleNotificationClick"
   />
+  <VSnackbar
+    v-model="incomingNotificationVisible"
+    color="primary"
+    location="top right"
+    :timeout="6000"
+  >
+    <div class="d-flex flex-column">
+      <strong>{{ incomingNotificationTitle }}</strong>
+      <span>{{ incomingNotificationMessage }}</span>
+    </div>
+  </VSnackbar>
 </template>

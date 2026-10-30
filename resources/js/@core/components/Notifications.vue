@@ -6,6 +6,14 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  unreadCount: {
+    type: Number,
+    default: null,
+  },
+  isAlerting: {
+    type: Boolean,
+    default: false,
+  },
   badgeProps: {
     type: Object,
     required: false,
@@ -25,9 +33,8 @@ const emit = defineEmits([
   'click:notification',
 ])
 
-const totalUnseenNotifications = computed(() => {
-  return props.notifications.filter(item => item.isSeen === false).length
-})
+const totalUnseenNotifications = computed(() => props.unreadCount
+  ?? props.notifications.filter(item => item.isSeen === false).length)
 
 const toggleReadUnread = (isSeen, Id) => {
   if (isSeen)
@@ -38,16 +45,22 @@ const toggleReadUnread = (isSeen, Id) => {
 </script>
 
 <template>
-  <IconBtn id="notification-btn">
+  <IconBtn
+    id="notification-btn"
+    :aria-label="totalUnseenNotifications ? `Notificaciones: ${totalUnseenNotifications} sin leer` : 'Notificaciones'"
+  >
     <VBadge
       v-bind="props.badgeProps"
-      :model-value="props.notifications.some(n => !n.isSeen)"
+      :model-value="totalUnseenNotifications > 0"
       color="error"
       dot
       offset-x="2"
       offset-y="3"
     >
-      <VIcon icon="tabler-bell" />
+      <VIcon
+        icon="tabler-bell"
+        :class="{ 'notification-bell--alerting': props.isAlerting }"
+      />
     </VBadge>
 
     <VMenu
@@ -66,7 +79,7 @@ const toggleReadUnread = (isSeen, Id) => {
 
           <template #append>
             <VChip
-              v-show="props.notifications.some(n => !n.isSeen)"
+              v-show="totalUnseenNotifications > 0"
               size="small"
               color="primary"
             >
@@ -154,6 +167,25 @@ const toggleReadUnread = (isSeen, Id) => {
 .notification-section {
   padding-block: 0.75rem;
   padding-inline: 1rem;
+}
+
+.notification-bell--alerting {
+  animation: notification-bell-alert 0.9s ease-in-out 3;
+  transform-origin: top center;
+}
+
+@keyframes notification-bell-alert {
+  0%, 100% {
+    transform: rotate(0);
+  }
+
+  20%, 60% {
+    transform: rotate(-15deg);
+  }
+
+  40%, 80% {
+    transform: rotate(15deg);
+  }
 }
 
 .list-item-hover-class {
