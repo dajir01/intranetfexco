@@ -10,6 +10,7 @@ const isBellAlerting = ref(false)
 const incomingNotificationVisible = ref(false)
 const incomingNotificationTitle = ref('')
 const incomingNotificationMessage = ref('')
+const notificationActionError = ref('')
 let bellAlertTimeout = null
 
 const canReceiveAdminNotifications = computed(() => {
@@ -95,12 +96,22 @@ const loadNotifications = async () => {
   }
 }
 
-const adjustUnreadCount = (notificationIds, isRead) => {
+const updateLocalReadState = (notificationIds, isRead) => {
   const ids = new Set(notificationIds)
+  let changedCount = 0
 
-  const changedCount = notifications.value.filter(item => (
-    ids.has(item.id) && item.isSeen !== isRead
-  )).length
+  notifications.value = notifications.value.map(item => {
+    if (!ids.has(item.id) || item.isSeen === isRead)
+      return item
+
+    changedCount++
+
+    return {
+      ...item,
+      isSeen: isRead,
+      color: isRead ? 'secondary' : 'primary',
+    }
+  })
 
   unreadCount.value = Math.max(0, unreadCount.value + (isRead ? -changedCount : changedCount))
 }
@@ -146,39 +157,61 @@ const playNotificationSound = async isPayment => {
 const markRead = async notificationIds => {
   const ids = Array.isArray(notificationIds) ? notificationIds : [notificationIds]
 
-  adjustUnreadCount(ids, true)
-  await Promise.all(ids.map(id => fetch(`/notificaciones/admin/${id}/leer`, {
-    method: 'PATCH',
-    headers: {
-      Accept: 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRF-TOKEN': getCsrfToken(),
-    },
-    credentials: 'same-origin',
-  }).catch(() => null)))
+  const results = await Promise.all(ids.map(async id => {
+    try {
+      const response = await fetch(`/notificaciones/admin/${id}/leer`, {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': getCsrfToken(),
+        },
+        credentials: 'same-origin',
+      })
 
-  notifications.value = notifications.value.map(item => (
-    ids.includes(item.id) ? { ...item, isSeen: true, color: 'secondary' } : item
-  ))
+      return { id, success: response.ok }
+    } catch {
+      return { id, success: false }
+    }
+  }))
+
+  const successfulIds = results.filter(result => result.success).map(result => result.id)
+
+  updateLocalReadState(successfulIds, true)
+  notificationActionError.value = results.some(result => !result.success)
+    ? 'No se pudo actualizar una notificación. Se volvió a consultar su estado.'
+    : ''
+  await loadNotifications()
 }
 
 const markUnRead = async notificationIds => {
   const ids = Array.isArray(notificationIds) ? notificationIds : [notificationIds]
 
-  adjustUnreadCount(ids, false)
-  await Promise.all(ids.map(id => fetch(`/notificaciones/admin/${id}/no-leer`, {
-    method: 'PATCH',
-    headers: {
-      Accept: 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRF-TOKEN': getCsrfToken(),
-    },
-    credentials: 'same-origin',
-  }).catch(() => null)))
+  const results = await Promise.all(ids.map(async id => {
+    try {
+      const response = await fetch(`/notificaciones/admin/${id}/no-leer`, {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': getCsrfToken(),
+        },
+        credentials: 'same-origin',
+      })
 
-  notifications.value = notifications.value.map(item => (
-    ids.includes(item.id) ? { ...item, isSeen: false, color: 'primary' } : item
-  ))
+      return { id, success: response.ok }
+    } catch {
+      return { id, success: false }
+    }
+  }))
+
+  const successfulIds = results.filter(result => result.success).map(result => result.id)
+
+  updateLocalReadState(successfulIds, false)
+  notificationActionError.value = results.some(result => !result.success)
+    ? 'No se pudo actualizar una notificación. Se volvió a consultar su estado.'
+    : ''
+  await loadNotifications()
 }
 
 const dismissNotification = async notificationId => {
@@ -297,5 +330,14 @@ onUnmounted(() => {
       <strong>{{ incomingNotificationTitle }}</strong>
       <span>{{ incomingNotificationMessage }}</span>
     </div>
+  </VSnackbar>
+  <VSnackbar
+    :model-value="Boolean(notificationActionError)"
+    color="error"
+    location="bottom right"
+    :timeout="5000"
+    @update:model-value="visible => !visible && (notificationActionError = '')"
+  >
+    {{ notificationActionError }}
   </VSnackbar>
 </template>

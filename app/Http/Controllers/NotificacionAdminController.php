@@ -24,6 +24,7 @@ class NotificacionAdminController extends Controller
 
         $items = NotificacionAdmin::query()
             ->where('id_usuario', $userId)
+            ->where('leida', false)
             ->latest('id')
             ->limit($limit)
             ->get();
