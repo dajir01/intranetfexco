@@ -32,4 +32,20 @@ export default [
       ability: 'credenciales.empresas.ver',
     },
   },
+  {
+    title: 'Control de Accesos',
+    icon: { icon: 'tabler-door-enter' },
+    to: { name: 'controlaccesos-list' },
+    meta: {
+      ability: 'controlaccesos.ingresos.ver',
+    },
+  },
+  {
+    title: 'Operadores de Acceso',
+    icon: { icon: 'tabler-user-shield' },
+    to: { name: 'controlaccesos-operadores' },
+    meta: {
+      ability: 'controlaccesos.operadores.ver',
+    },
+  },
 ]

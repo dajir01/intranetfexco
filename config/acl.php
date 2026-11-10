@@ -102,6 +102,12 @@ return [
         ['module' => 'controlventas', 'action' => 'eliminar_ultimo'],
         ['module' => 'controlventas', 'action' => 'exportar'],
 
+        ['module' => 'controlaccesos', 'action' => 'ingresos.ver'],
+        ['module' => 'controlaccesos', 'action' => 'registros.ver'],
+        ['module' => 'controlaccesos', 'action' => 'ingresos.exportar'],
+        ['module' => 'controlaccesos', 'action' => 'operadores.ver'],
+        ['module' => 'controlaccesos', 'action' => 'operadores.gestionar'],
+
         // Empresas
         ['module' => 'empresas', 'action' => 'ver'],
         ['module' => 'empresas', 'action' => 'detalle'],
@@ -153,6 +159,10 @@ return [
         ['module' => 'credenciales.empresas', 'action' => 'crear'],
         ['module' => 'credenciales.empresas', 'action' => 'eliminar'],
         ['module' => 'credenciales.empresas', 'action' => 'exportar'],
+        ['module' => 'credenciales.empresas.whatsapp', 'action' => 'ver'],
+        ['module' => 'credenciales.empresas.whatsapp', 'action' => 'enviar'],
+        ['module' => 'credenciales.empresas.email', 'action' => 'ver'],
+        ['module' => 'credenciales.empresas.email', 'action' => 'enviar'],
         ['module' => 'credenciales.tipos', 'action' => 'editar'],
         ['module' => 'credenciales.pines', 'action' => 'ver'],
         ['module' => 'credenciales.pines', 'action' => 'generar'],
@@ -280,6 +290,11 @@ return [
         'controlventas.delete_last' => 'controlventas.eliminar_ultimo',
         'controlventas.export' => 'controlventas.exportar',
 
+        'controlaccesos.ingresos.ver' => 'controlaccesos.ingresos.ver',
+        'controlaccesos.registros.ver' => 'controlaccesos.registros.ver',
+        'controlaccesos.ingresos.exportar' => 'controlaccesos.ingresos.exportar',
+        'controlaccesos.operadores.ver' => 'controlaccesos.operadores.ver',
+        'controlaccesos.operadores.gestionar' => 'controlaccesos.operadores.gestionar',
         'empresas.ver'       => 'empresas.ver',
         'empresas.detalle'   => 'empresas.detalle',
         'empresas.ferias'    => 'empresas.ferias',

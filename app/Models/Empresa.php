@@ -87,5 +87,10 @@ class Empresa extends Model
         'id_usuario_creacion',
         'es_activo',
     ];
+
+    protected $hidden = [
+        'pass',
+    ];
+
     protected $guarded = [];
 }

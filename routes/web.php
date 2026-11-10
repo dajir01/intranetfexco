@@ -25,6 +25,8 @@ use App\Http\Controllers\ModeloContratoController;
 use App\Http\Controllers\CorrespondenciaController;
 use App\Http\Controllers\NotificationConfigurationController;
 use App\Http\Controllers\CredencialController;
+use App\Http\Controllers\ControlAccesosController;
+use App\Http\Controllers\ControlAccesosOperadoresController;
 use App\Http\Controllers\CredencialPinController;
 use App\Http\Controllers\ReglamentoFeriaController;
 
@@ -44,6 +46,9 @@ Route::get('/csrf-token', function () {
     ]);
 });
 
+    Route::get('/credenciales/fotos/{filename}', [CredencialController::class, 'mostrarFotoAcreditado'])
+        ->where('filename', 'acreditado_[A-Fa-f0-9-]+\.(?:jpg|jpeg|png)')
+        ->name('credenciales.fotos');
 Route::middleware(['auth', 'ability:credenciales.empresas.ver'])->group(function () {
     Route::get('/credenciales/eventos', [CredencialController::class, 'eventos']);
     Route::get('/credenciales/empresas/buscar', [CredencialController::class, 'buscarEmpresas']);
@@ -64,9 +69,29 @@ Route::middleware(['auth', 'ability:credenciales.empresas.ver'])->group(function
     Route::get('/credenciales/acreditados/{idCredencial}/historial', [CredencialController::class, 'historialCredencial'])->whereNumber('idCredencial')->middleware('permission:credenciales.historial.ver');
     Route::get('/credenciales/empresas/{idEmpresa}/historial-acreditados', [CredencialController::class, 'historialAcreditadosEmpresa'])->whereNumber('idEmpresa')->middleware('permission:credenciales.historial.ver');
     Route::get('/credenciales/eventos/{idFeria}/empresas', [CredencialController::class, 'empresas'])->whereNumber('idFeria');
+    Route::post('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}/whatsapp', [CredencialController::class, 'iniciarEnvioWhatsappEmpresa'])
+        ->whereNumber(['idFeria', 'idEmpresa'])
+        ->middleware('permission:credenciales.empresas.whatsapp.enviar');
+    Route::post('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}/whatsapp/preparar-copia', [CredencialController::class, 'prepararCopiaWhatsappEmpresa'])
+        ->whereNumber(['idFeria', 'idEmpresa'])
+        ->middleware('permission:credenciales.empresas.whatsapp.enviar');
+    Route::post('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}/whatsapp/copiar', [CredencialController::class, 'registrarCopiaWhatsappEmpresa'])
+        ->whereNumber(['idFeria', 'idEmpresa'])
+        ->middleware('permission:credenciales.empresas.whatsapp.enviar');
+    Route::post('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}/email', [CredencialController::class, 'enviarAccesosEmailEmpresa'])
+        ->whereNumber(['idFeria', 'idEmpresa'])
+        ->middleware('permission:credenciales.empresas.email.enviar');
+    Route::get('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}/envios/historial', [CredencialController::class, 'historialEnviosEmpresa'])
+        ->whereNumber(['idFeria', 'idEmpresa'])
+        ->middleware('permission:credenciales.empresas.whatsapp.ver,credenciales.empresas.email.ver');
     Route::get('/credenciales/eventos/{idFeria}/empresas/exportar', [CredencialController::class, 'exportarEmpresasCredenciales'])->whereNumber('idFeria')->middleware('permission:credenciales.empresas.exportar');
-    Route::get('/credenciales/eventos/{idFeria}/acreditados', [CredencialController::class, 'acreditadosPorEvento'])->whereNumber('idFeria');
+    Route::get('/credenciales/eventos/{idFeria}/acreditados', [CredencialController::class, 'acreditadosPorEvento'])
+        ->whereNumber('idFeria')
+        ->middleware('permission:credenciales.acreditados.ver');
     Route::get('/credenciales/eventos/{idFeria}/acreditados/exportar', [CredencialController::class, 'exportarAcreditados'])->whereNumber('idFeria')->middleware('permission:credenciales.acreditados.exportar');
+    Route::post('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}/credencial-acceso', [CredencialController::class, 'mostrarContrasenaEmpresa'])
+        ->whereNumber(['idFeria', 'idEmpresa'])
+        ->middleware('permission:usuarios.ver');
     Route::get('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}', [CredencialController::class, 'detalleEmpresa'])->whereNumber(['idFeria', 'idEmpresa'])->middleware('permission:credenciales.acreditados.ver');
     Route::get('/credenciales/eventos/{idFeria}/tipos', [CredencialController::class, 'tiposPorEvento'])->whereNumber('idFeria');
     Route::post('/credenciales/eventos/{idFeria}/tipos/{tipo}/diseño', [CredencialController::class, 'guardarDiseñoTipo'])
@@ -104,8 +129,9 @@ Route::middleware(['auth', 'ability:credenciales.empresas.ver'])->group(function
 });
 
 Route::get('/autoacreditacion', fn () => view('application'))->name('autoacreditacion');
-Route::post('/api/autoacreditacion/validar-pin', [CredencialPinController::class, 'validarPublico'])->middleware('throttle:10,1');
-Route::post('/api/autoacreditacion/registrar', [CredencialPinController::class, 'registrarPublico'])->middleware('throttle:10,1');
+Route::get('/api/autoacreditacion/eventos', [CredencialPinController::class, 'eventosPublicos'])->middleware('throttle:30,1');
+Route::post('/api/autoacreditacion/validar-pin', [CredencialPinController::class, 'validarPublico'])->middleware('throttle:5,1');
+Route::post('/api/autoacreditacion/registrar', [CredencialPinController::class, 'registrarPublico'])->middleware('throttle:5,1');
 
 // Rutas públicas de Contratos (acceso sin autenticación para formularios públicos)
 Route::get('/api/formulario/contrato/{id_contrato}/{clave}', [ContratoController::class, 'getContratoPublico'])
@@ -185,6 +211,26 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventario/reporte/productos/pdf', [InventarioController::class, 'reporteProductosPDF'])->middleware('ability:reports.download');
     Route::get('/inventario/reporte/productos/excel', [InventarioController::class, 'reporteProductosExcel'])->middleware('ability:reports.download');
     Route::get('/inventario/reporte/productos/imprimir-codigos', [InventarioController::class, 'imprimirCodigos'])->middleware('ability:reports.download');
+
+    Route::middleware('permission:controlaccesos.ingresos.ver')->prefix('/control-accesos')->group(function () {
+        Route::get('/eventos', [ControlAccesosController::class, 'eventos']);
+        Route::get('/operadores-filtro', [ControlAccesosController::class, 'operadores']);
+        Route::get('/resumen', [ControlAccesosController::class, 'resumen']);
+    });
+    Route::middleware('permission:controlaccesos.registros.ver')
+        ->get('/control-accesos/registros', [ControlAccesosController::class, 'registros']);
+    Route::middleware('permission:controlaccesos.ingresos.exportar')
+        ->get('/control-accesos/exportar', [ControlAccesosController::class, 'exportar']);
+    Route::middleware('permission:controlaccesos.operadores.ver,controlaccesos.operadores.gestionar,usuarios.gestionar_permisos')
+        ->prefix('/control-accesos/operadores')
+        ->group(function () {
+            Route::get('/', [ControlAccesosOperadoresController::class, 'index']);
+            Route::get('/eventos', [ControlAccesosOperadoresController::class, 'eventos']);
+            Route::middleware('permission:controlaccesos.operadores.gestionar,usuarios.gestionar_permisos')->group(function () {
+                Route::post('/', [ControlAccesosOperadoresController::class, 'store']);
+                Route::put('/{id}', [ControlAccesosOperadoresController::class, 'update'])->whereNumber('id');
+            });
+        });
 
     // Usuario API
     Route::get('/usuarios', [UsuarioController::class, 'usuarios'])->middleware('ability:users.view');

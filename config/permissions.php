@@ -76,6 +76,10 @@ return [
         'credenciales.empresas.crear' => ['admin', 'comercial_access'],
         'credenciales.empresas.eliminar' => ['admin', 'comercial_access'],
         'credenciales.empresas.exportar' => ['admin', 'comercial_access'],
+        'credenciales.empresas.whatsapp.ver' => ['admin', 'comercial_access'],
+        'credenciales.empresas.whatsapp.enviar' => ['admin', 'comercial_access'],
+        'credenciales.empresas.email.ver' => ['admin', 'comercial_access'],
+        'credenciales.empresas.email.enviar' => ['admin', 'comercial_access'],
         'credenciales.tipos.editar' => ['admin', 'comercial_access'],
         'credenciales.pines.ver' => ['admin', 'comercial_access'],
         'credenciales.pines.generar' => ['admin', 'comercial_access'],
@@ -152,6 +156,13 @@ return [
         'empresas.detalle'  => ['admin', 'full', 'auditoria', 'comercial_access'],
         'empresas.ferias'   => ['admin', 'full', 'auditoria', 'comercial_access'],
         'empresas.historial'=> ['admin', 'auditoria'],
+
+        // Control de Accesos
+        'controlaccesos.ingresos.ver' => ['admin', 'full', 'auditoria'],
+        'controlaccesos.registros.ver' => ['admin', 'full'],
+        'controlaccesos.ingresos.exportar' => ['admin', 'full', 'auditoria'],
+        'controlaccesos.operadores.ver' => [],
+        'controlaccesos.operadores.gestionar' => [],
 
         // Control Ventas (solo Sistemas y Administracion)
         'controlventas.view' => ['admin'],
