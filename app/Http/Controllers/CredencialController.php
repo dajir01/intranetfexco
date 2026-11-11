@@ -1241,7 +1241,7 @@ class CredencialController extends Controller
         $validated['nombre'] = $this->normalizarNombre($validated['nombre']);
         $celular = $this->normalizarCelular($validated['celular'] ?? null);
 
-        DB::transaction(function () use ($request, $validated, $celular, $idCredencial): void {
+        DB::transaction(function () use ($request, $validated, $celular, $idCredencial, $photoStorage): void {
             $credencial = DB::table('credenciales')->where('id_credencial', $idCredencial)->lockForUpdate()->firstOrFail();
             $ci = trim($validated['ci']);
             $duplicado = DB::table('expositores')
