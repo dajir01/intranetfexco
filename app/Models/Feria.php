@@ -26,6 +26,10 @@ class Feria extends Model
         'id_modeloademda'
     ];
 
+    protected $casts = [
+        'acreditacion_empresa_habilitada' => 'boolean',
+    ];
+
     protected $guarded = [];
 
     public function scopeOrderByFechaEvento($query, string $direction = 'desc')

@@ -41,6 +41,7 @@ const dialogModalidad = ref(false)
 const modalidadNueva = ref(1)
 const dialogQr = ref(false)
 const dialogEstado = ref(false)
+const actualizandoHabilitacionAcreditacion = ref(false)
 const dialogInhabilitar = ref(false)
 const accionEstado = ref('')
 const estadoNuevo = ref(null)
@@ -434,6 +435,54 @@ const cargarEventos = async () => {
   }
 }
 
+const cambiarHabilitacionAcreditacion = async () => {
+  const feria = feriaSeleccionadaInfo.value
+  if (!feria || !can('credenciales.acreditados.editar') || actualizandoHabilitacionAcreditacion.value) return
+
+  actualizandoHabilitacionAcreditacion.value = true
+  error.value = ''
+
+  try {
+    const response = await fetch(`/credenciales/eventos/${feria.id_feria}/acreditacion-empresa`, {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ habilitada: !feria.acreditacion_empresa_habilitada }),
+    })
+
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload.message || 'No se pudo actualizar la habilitación de acreditaciones.')
+
+    const acreditacionHabilitada = Boolean(payload.data?.acreditacion_empresa_habilitada)
+
+    eventos.value = eventos.value.map(evento => {
+      if (Number(evento.id_feria) !== Number(feria.id_feria)) return evento
+
+      return {
+        ...evento,
+        // eslint-disable-next-line camelcase
+        acreditacion_empresa_habilitada: acreditacionHabilitada,
+      }
+    })
+    snackbarAccion.value = {
+      show: true,
+      color: 'success',
+      text: payload.data?.acreditacion_empresa_habilitada
+        ? 'Las acreditaciones de empresas quedaron habilitadas en Plataforma.'
+        : 'Las acreditaciones de empresas quedaron cerradas en Plataforma.',
+    }
+  } catch (exception) {
+    error.value = exception.message || 'No se pudo actualizar la habilitación de acreditaciones.'
+  } finally {
+    actualizandoHabilitacionAcreditacion.value = false
+  }
+}
+
 const cargarAcreditados = async () => {
   if (!eventoSeleccionado.value) {
     acreditados.value = []
@@ -723,8 +772,31 @@ onMounted(cargarEventos)
               class="mb-0"
             >
               <strong>{{ feriaSeleccionadaInfo.nombre_feria }}</strong>
-              <div class="text-caption">
-                Total acreditados: {{ totalAcreditados }}
+              <div class="d-flex align-center justify-space-between flex-wrap gap-3 mt-2">
+                <div class="text-caption">
+                  Total acreditados: {{ totalAcreditados }}
+                </div>
+                <div
+                  v-if="can('credenciales.acreditados.editar')"
+                  class="d-flex align-center gap-2"
+                >
+                  <VChip
+                    size="small"
+                    :color="feriaSeleccionadaInfo.acreditacion_empresa_habilitada ? 'success' : 'secondary'"
+                    variant="tonal"
+                  >
+                    Acreditación en Plataforma: {{ feriaSeleccionadaInfo.acreditacion_empresa_habilitada ? 'Habilitada' : 'Cerrada' }}
+                  </VChip>
+                  <VBtn
+                    size="small"
+                    :color="feriaSeleccionadaInfo.acreditacion_empresa_habilitada ? 'error' : 'success'"
+                    variant="tonal"
+                    :loading="actualizandoHabilitacionAcreditacion"
+                    @click="cambiarHabilitacionAcreditacion"
+                  >
+                    {{ feriaSeleccionadaInfo.acreditacion_empresa_habilitada ? 'Cerrar' : 'Habilitar' }}
+                  </VBtn>
+                </div>
               </div>
             </VAlert>
           </VCol>

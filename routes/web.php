@@ -51,6 +51,9 @@ Route::get('/csrf-token', function () {
         ->name('credenciales.fotos');
 Route::middleware(['auth', 'ability:credenciales.empresas.ver'])->group(function () {
     Route::get('/credenciales/eventos', [CredencialController::class, 'eventos']);
+    Route::patch('/credenciales/eventos/{idFeria}/acreditacion-empresa', [CredencialController::class, 'actualizarHabilitacionAcreditacion'])
+        ->whereNumber('idFeria')
+        ->middleware('permission:credenciales.acreditados.editar');
     Route::get('/credenciales/empresas/buscar', [CredencialController::class, 'buscarEmpresas']);
     Route::get('/credenciales/expositores/buscar', [CredencialController::class, 'buscarExpositorPorCi']);
     Route::post('/credenciales/eventos/{idFeria}/empresas/{idEmpresa}/acreditados', [CredencialController::class, 'acreditarExpositor'])->whereNumber(['idFeria', 'idEmpresa'])->middleware('permission:credenciales.acreditados.crear');

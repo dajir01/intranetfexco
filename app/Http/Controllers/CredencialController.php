@@ -35,7 +35,7 @@ class CredencialController extends Controller
     public function eventos(): JsonResponse
     {
         $eventos = Feria::query()
-            ->select('id_feria', 'nombre_feria', 'fecha_inicio', 'fecha_fin', 'tipo_credenciales')
+            ->select('id_feria', 'nombre_feria', 'fecha_inicio', 'fecha_fin', 'tipo_credenciales', 'acreditacion_empresa_habilitada')
             ->whereNotNull('tipo_credenciales')
             ->where('tipo_credenciales', '!=', '')
             ->orderByFechaEvento()
@@ -44,6 +44,25 @@ class CredencialController extends Controller
         return response()->json([
             'success' => true,
             'data' => $eventos,
+        ]);
+    }
+
+    public function actualizarHabilitacionAcreditacion(Request $request, int $idFeria): JsonResponse
+    {
+        $validated = $request->validate([
+            'habilitada' => ['required', 'boolean'],
+        ]);
+
+        $feria = Feria::query()->findOrFail($idFeria);
+        $feria->acreditacion_empresa_habilitada = (bool) $validated['habilitada'];
+        $feria->save();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id_feria' => (int) $feria->id_feria,
+                'acreditacion_empresa_habilitada' => (bool) $feria->acreditacion_empresa_habilitada,
+            ],
         ]);
     }
 
