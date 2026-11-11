@@ -81,11 +81,21 @@ const headers = [
   { title: 'Acciones', key: 'actions', sortable: false, align: 'end' },
 ]
 
-const modalidadesFiltro = [
-  { title: 'Todas las modalidades', value: 'Todos' },
-  { title: 'Física', value: 'Física' },
-  { title: 'Digital', value: 'Digital' },
-]
+const modalidadesFiltro = computed(() => {
+  if (Number(eventoSeleccionado.value) === 19) {
+    return [
+      { title: 'Todas las modalidades', value: 'Todos' },
+      { title: 'Digital', value: 'Digital' },
+    ]
+  }
+
+  return [
+    { title: 'Todas las modalidades', value: 'Todos' },
+    { title: 'Física', value: 'Física' },
+    { title: 'Digital', value: 'Digital' },
+  ]
+})
+
 const tiposFiltro = [
   { title: 'Todos los tipos', value: 'Todos' },
   { title: 'Expositor', value: 'Expositor' },
@@ -534,6 +544,7 @@ const sincronizarAcreditados = async (intentos = 1, espera = 0) => {
 }
 
 const cambiarEvento = () => {
+  if (Number(eventoSeleccionado.value) === 19) modalidadFiltro.value = 'Todos'
   page.value = 1
   credencialesSeleccionadas.value = []
   cargarAcreditados()
@@ -1177,7 +1188,10 @@ onMounted(cargarEventos)
               </template>
               <span>Ver historial</span>
             </VTooltip>
-            <VTooltip v-if="item.estado_credencial_codigo === 1 && can('credenciales.modalidad.cambiar')" location="top">
+            <VTooltip
+              v-if="Number(eventoSeleccionado) !== 19 && item.estado_credencial_codigo === 1 && can('credenciales.modalidad.cambiar')"
+              location="top"
+            >
               <template #activator="{ props }">
                 <VBtn v-bind="props" icon size="small" variant="text" color="secondary" @click="abrirModalidad(item)"><VIcon icon="tabler-repeat" /></VBtn>
               </template>

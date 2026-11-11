@@ -14,6 +14,7 @@ use App\Models\Feria;
 use App\Models\Pabellon;
 use App\Models\Stand;
 use App\Services\CredentialPhotoStorage;
+use App\Support\CredentialModality;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -166,7 +167,7 @@ class CredencialController extends Controller
                     'nombre_empresa' => $empresa->nombre_empresa,
                     'tipo_credencial' => $tipo,
                     'codigo_contrato' => (string) $empresa->codigo_evento.str_pad((string) $empresa->codigo_contrato, 5, '0', STR_PAD_LEFT),
-                    'modalidad_credencial' => $empresa->tipo_credenciales === null ? null : ((int) $empresa->tipo_credenciales === 1 ? 'Digital' : 'Física'),
+                    'modalidad_credencial' => CredentialModality::label($idFeria, $empresa->tipo_credenciales === null ? null : (int) $empresa->tipo_credenciales),
                     'credenciales_asignadas' => $asignadas,
                     'credenciales_utilizadas' => $utilizadas,
                 ];
@@ -208,7 +209,7 @@ class CredencialController extends Controller
                     'id_empresa' => (int) $vinculacion->id_empresa,
                     'nombre_empresa' => $vinculacion->empresa?->nombre_empresa,
                     'tipo_credencial' => $vinculacion->tipo_credencial,
-                    'modalidad_credencial' => $vinculacion->tipo_credenciales === null ? null : ((int) $vinculacion->tipo_credenciales === 1 ? 'Digital' : 'Física'),
+                    'modalidad_credencial' => CredentialModality::label((int) $vinculacion->id_feria, $vinculacion->tipo_credenciales === null ? null : (int) $vinculacion->tipo_credenciales),
                     'codigo_contrato' => 'Sin contrato',
                     'credenciales_asignadas' => (int) $vinculacion->cantidad_credenciales + $adicionales,
                     'credenciales_utilizadas' => $credencialesUtilizadas,
@@ -372,9 +373,11 @@ class CredencialController extends Controller
             });
         }
 
-        if (($validated['modalidad'] ?? null) === 'Física') {
+        if (($validated['modalidad'] ?? null) === 'Física' && ! CredentialModality::isDigitalOnlyEvent((int) $feria->id_feria)) {
             $query->where('acreditados.modalidad_credencial', 0);
-        } elseif (($validated['modalidad'] ?? null) === 'Digital') {
+        } elseif (($validated['modalidad'] ?? null) === 'Física') {
+            $query->whereRaw('1 = 0');
+        } elseif (($validated['modalidad'] ?? null) === 'Digital' && ! CredentialModality::isDigitalOnlyEvent((int) $feria->id_feria)) {
             $query->where(function ($sub) {
                 $sub->whereNull('acreditados.modalidad_credencial')->orWhere('acreditados.modalidad_credencial', 1);
             });
@@ -439,9 +442,7 @@ class CredencialController extends Controller
                 1 => 'Expositor', 2 => 'Prensa', 3 => 'Oficial', 4 => 'Servicios', 5 => 'Negocios',
                 default => 'Sin tipo definido',
             },
-            'modalidad_credencial' => $acreditado->modalidad_credencial !== null
-                ? ((int) $acreditado->modalidad_credencial === 1 ? 'Digital' : 'Física')
-                : 'Digital',
+            'modalidad_credencial' => CredentialModality::label((int) $feria->id_feria, $acreditado->modalidad_credencial === null ? null : (int) $acreditado->modalidad_credencial, true),
             'estado_credencial_codigo' => (int) $acreditado->estado_credencial,
             'estado_credencial' => $this->estadoCredencialLabel((int) $acreditado->estado_credencial),
             'salida' => $salidas->get($acreditado->id_credencial),
@@ -454,9 +455,9 @@ class CredencialController extends Controller
             ->select(
                 'tipo_credencial',
                 DB::raw('COUNT(*) as acreditadas'),
-                DB::raw('SUM(CASE WHEN modalidad_credencial = 1 THEN 1 ELSE 0 END) as digitales'),
-                DB::raw('SUM(CASE WHEN modalidad_credencial = 0 THEN 1 ELSE 0 END) as fisicas'),
-                DB::raw('SUM(CASE WHEN modalidad_credencial IS NULL THEN 1 ELSE 0 END) as digitales_legacy')
+                DB::raw('SUM(CASE WHEN id_feria = '.CredentialModality::DIGITAL_ONLY_EVENT_ID.' OR modalidad_credencial = 1 THEN 1 ELSE 0 END) as digitales'),
+                DB::raw('SUM(CASE WHEN id_feria != '.CredentialModality::DIGITAL_ONLY_EVENT_ID.' AND modalidad_credencial = 0 THEN 1 ELSE 0 END) as fisicas'),
+                DB::raw('SUM(CASE WHEN id_feria != '.CredentialModality::DIGITAL_ONLY_EVENT_ID.' AND modalidad_credencial IS NULL THEN 1 ELSE 0 END) as digitales_legacy')
             )
             ->groupBy('tipo_credencial')
             ->get()
@@ -509,9 +510,11 @@ class CredencialController extends Controller
             });
         }
 
-        if (($validated['modalidad'] ?? null) === 'Física') {
+        if (($validated['modalidad'] ?? null) === 'Física' && ! CredentialModality::isDigitalOnlyEvent((int) $feria->id_feria)) {
             $query->where('acreditados.modalidad_credencial', 0);
-        } elseif (($validated['modalidad'] ?? null) === 'Digital') {
+        } elseif (($validated['modalidad'] ?? null) === 'Física') {
+            $query->whereRaw('1 = 0');
+        } elseif (($validated['modalidad'] ?? null) === 'Digital' && ! CredentialModality::isDigitalOnlyEvent((int) $feria->id_feria)) {
             $query->where(function ($sub) {
                 $sub->whereNull('acreditados.modalidad_credencial')->orWhere('acreditados.modalidad_credencial', 1);
             });
@@ -1206,7 +1209,7 @@ class CredencialController extends Controller
             $idCredencial = DB::table('credenciales')->insertGetId([
                 'cod_credencial' => 'ACR-'.$feria->id_feria.'-'.($idContrato ?? 'D').'-'.$idExpositor.'-'.now()->format('YmdHis'),
                 'id_expositor' => $idExpositor, 'id_contrato' => $idContrato, 'id_empresa' => $empresa->id_empresa, 'id_feria' => $feria->id_feria,
-                'com_medio' => '', 'com_dias' => '', 'tipo_credencial' => $tipoCodigo, 'modalidad_credencial' => (int) ($vinculacion?->tipo_credenciales ?? $contrato?->tipo_credenciales ?? 1), 'estado_credencial' => 1, 'ingreso' => 0,
+                'com_medio' => '', 'com_dias' => '', 'tipo_credencial' => $tipoCodigo, 'modalidad_credencial' => CredentialModality::normalize((int) $feria->id_feria, (int) ($vinculacion?->tipo_credenciales ?? $contrato?->tipo_credenciales ?? 1)), 'estado_credencial' => 1, 'ingreso' => 0,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
             $token = $this->crearTokenQr($idCredencial);
@@ -1343,6 +1346,9 @@ class CredencialController extends Controller
 
         $resultado = DB::transaction(function () use ($validated, $idCredencial): array {
             $credencial = DB::table('credenciales')->where('id_credencial', $idCredencial)->lockForUpdate()->firstOrFail();
+            if (CredentialModality::isDigitalOnlyEvent((int) $credencial->id_feria) && (int) $validated['modalidad'] !== 1) {
+                throw ValidationException::withMessages(['modalidad' => 'Las credenciales del evento 19 solo pueden ser digitales.']);
+            }
             $anterior = $this->modalidadEtiqueta($credencial->modalidad_credencial);
             $nueva = $this->modalidadEtiqueta((int) $validated['modalidad']);
             if ($credencial->modalidad_credencial !== null && (int) $credencial->modalidad_credencial === (int) $validated['modalidad']) {
@@ -1451,6 +1457,9 @@ class CredencialController extends Controller
 
         $resultado = DB::transaction(function () use ($validated, $idCredencial): array {
             $credencial = DB::table('credenciales')->where('id_credencial', $idCredencial)->lockForUpdate()->firstOrFail();
+            if (CredentialModality::isDigitalOnlyEvent((int) $credencial->id_feria) && (int) $validated['modalidad'] !== 1) {
+                throw ValidationException::withMessages(['modalidad' => 'Las credenciales del evento 19 solo pueden ser digitales.']);
+            }
             $versionAnterior = $this->versionQrActiva($idCredencial);
             $this->revocarTokenQrActivo($idCredencial, $validated['motivo']);
             $token = $this->crearTokenQr($idCredencial);
@@ -1994,9 +2003,11 @@ class CredencialController extends Controller
                 'pabellon' => $standsContrato->first() ? ($pabellones->get($standsContrato->first()->id_pabellon)?->nombre_pabellon ?? null) : null,
                 'stands' => $standsContrato->pluck('numero_stand')->values(),
                 'tipo_credencial' => $tipoCredencial,
-                'modalidad_credencial' => $vinculacion?->tipo_credenciales !== null
-                    ? ((int) $vinculacion->tipo_credenciales === 1 ? 'Digital' : 'Física')
-                    : ($contrato->tipo_credenciales === null ? 'Digital' : ((int) $contrato->tipo_credenciales === 1 ? 'Digital' : 'Física')),
+                'modalidad_credencial' => CredentialModality::label(
+                    (int) $feria->id_feria,
+                    $vinculacion?->tipo_credenciales !== null ? (int) $vinculacion->tipo_credenciales : ($contrato->tipo_credenciales === null ? null : (int) $contrato->tipo_credenciales),
+                    true,
+                ),
                 'credenciales_asignadas' => $credencialesAsignadas,
                 'credenciales_adicionales' => $credencialesAdicionales,
                 'credenciales_utilizadas' => $credencialesUtilizadas,
@@ -2016,11 +2027,13 @@ class CredencialController extends Controller
                         'cod_credencial' => $acreditado->cod_credencial,
                         'estado_credencial_codigo' => (int) $acreditado->estado_credencial,
                         'estado_credencial' => $this->estadoCredencialLabel((int) $acreditado->estado_credencial),
-                        'modalidad_credencial' => $acreditado->modalidad_credencial !== null
-                            ? $this->modalidadEtiqueta((int) $acreditado->modalidad_credencial)
-                            : ($vinculacion?->tipo_credenciales !== null
-                            ? ((int) $vinculacion->tipo_credenciales === 1 ? 'Digital' : 'Física')
-                            : ($contrato->tipo_credenciales === null ? 'Digital' : ((int) $contrato->tipo_credenciales === 1 ? 'Digital' : 'Física'))),
+                        'modalidad_credencial' => CredentialModality::label(
+                            (int) $feria->id_feria,
+                            $acreditado->modalidad_credencial !== null
+                                ? (int) $acreditado->modalidad_credencial
+                                : ($vinculacion?->tipo_credenciales !== null ? (int) $vinculacion->tipo_credenciales : ($contrato->tipo_credenciales === null ? null : (int) $contrato->tipo_credenciales)),
+                            true,
+                        ),
                     ])
                     ->values(),
             ];
@@ -2080,7 +2093,7 @@ class CredencialController extends Controller
                 'id_contrato' => null,
                 'codigo_contrato' => 'Sin contrato',
                 'tipo_credencial' => $vinculacion->tipo_credencial,
-                'modalidad_credencial' => $vinculacion->tipo_credenciales === null ? 'Digital' : ((int) $vinculacion->tipo_credenciales === 1 ? 'Digital' : 'Física'),
+                'modalidad_credencial' => CredentialModality::label((int) $vinculacion->id_feria, $vinculacion->tipo_credenciales === null ? null : (int) $vinculacion->tipo_credenciales, true),
                 'pabellon' => null,
                 'stands' => [],
                 'metraje_total' => 0,
@@ -2102,9 +2115,11 @@ class CredencialController extends Controller
                         'cod_credencial' => $acreditado->cod_credencial,
                         'estado_credencial_codigo' => (int) $acreditado->estado_credencial,
                         'estado_credencial' => $this->estadoCredencialLabel((int) $acreditado->estado_credencial),
-                        'modalidad_credencial' => $acreditado->modalidad_credencial !== null
-                            ? $this->modalidadEtiqueta((int) $acreditado->modalidad_credencial)
-                            : ($vinculacion->tipo_credenciales === null ? 'Digital' : ((int) $vinculacion->tipo_credenciales === 1 ? 'Digital' : 'Física')),
+                        'modalidad_credencial' => CredentialModality::label(
+                            (int) $vinculacion->id_feria,
+                            $acreditado->modalidad_credencial !== null ? (int) $acreditado->modalidad_credencial : ($vinculacion->tipo_credenciales === null ? null : (int) $vinculacion->tipo_credenciales),
+                            true,
+                        ),
                     ])
                     ->values(),
             ];
@@ -2388,6 +2403,7 @@ class CredencialController extends Controller
     public function imprimirCredencialFisica(int $idCredencial): \Symfony\Component\HttpFoundation\Response
     {
         $acreditado = $this->credencialesParaSalida([$idCredencial])->first();
+        abort_unless(! CredentialModality::isDigitalOnlyEvent((int) $acreditado->id_feria), 422, 'Las credenciales del evento 19 solo pueden descargarse en formato digital.');
         $this->registrarDescargasDigitales([$acreditado->id_credencial], 'impresion');
 
         return response($this->generarPdfCredencialFisica($acreditado), 200, [
@@ -2403,6 +2419,7 @@ class CredencialController extends Controller
             'credenciales.*' => ['integer', 'distinct'],
         ]);
         $acreditados = $this->credencialesParaSalida($validated['credenciales']);
+        abort_unless($acreditados->every(fn ($acreditado) => ! CredentialModality::isDigitalOnlyEvent((int) $acreditado->id_feria)), 422, 'Las credenciales del evento 19 solo pueden descargarse en formato digital.');
         $this->registrarDescargasDigitales($acreditados->pluck('id_credencial')->all(), 'impresion');
         $nombreEmpresa = Str::slug($acreditados->first()->nombre_empresa ?: 'empresa');
 
@@ -2619,11 +2636,14 @@ class CredencialController extends Controller
             ->whereIn('credencial.id_credencial', $ids)
             ->where('credencial.estado_credencial', '!=', 3)
             ->when($soloDigitales, fn ($query) => $query->where(function ($sub) {
-                $sub->whereNull('credencial.modalidad_credencial')->orWhere('credencial.modalidad_credencial', 1);
+                $sub->where('credencial.id_feria', CredentialModality::DIGITAL_ONLY_EVENT_ID)
+                    ->orWhereNull('credencial.modalidad_credencial')
+                    ->orWhere('credencial.modalidad_credencial', 1);
             }))
             ->select(
                 'credencial.id_credencial', 'credencial.id_expositor', 'credencial.id_feria', 'credencial.tipo_credencial',
-                'credencial.modalidad_credencial', 'expositor.nombre', 'expositor.ci', 'expositor.exp', 'expositor.tipo_documento', 'expositor.foto',
+                DB::raw('CASE WHEN credencial.id_feria = '.CredentialModality::DIGITAL_ONLY_EVENT_ID.' THEN 1 ELSE credencial.modalidad_credencial END as modalidad_credencial'),
+                'expositor.nombre', 'expositor.ci', 'expositor.exp', 'expositor.tipo_documento', 'expositor.foto',
                 'expositor.email', 'expositor.com_email',
                 'evento.nombre_feria', 'empresa.nombre_empresa'
             )
@@ -3162,7 +3182,7 @@ class CredencialController extends Controller
                 'id_empresa' => $empresa->id_empresa,
                 'id_feria' => $feria->id_feria,
                 'tipo_credencial' => $validated['tipo_credencial'],
-                'tipo_credenciales' => $validated['tipo_credenciales'],
+                'tipo_credenciales' => CredentialModality::normalize((int) $feria->id_feria, (int) $validated['tipo_credenciales']),
                 'cantidad_credenciales' => $validated['cantidad_credenciales'],
                 'id_contrato' => null,
                 'id_usuario_creacion' => Auth::user()?->id_usuario,

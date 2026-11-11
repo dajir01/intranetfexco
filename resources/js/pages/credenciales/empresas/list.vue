@@ -226,6 +226,7 @@ const prepararAccesoNuevaEmpresa = () => {
 
 const abrirDialogAgregar = async () => {
   limpiarFormularioAgregar()
+  if (eventoSoloDigital.value) formularioAgregar.value.tipo_credenciales = 1
   dialogAgregar.value = true
   loadingTipos.value = true
 
@@ -329,7 +330,7 @@ const validarFormularioAgregar = () => {
   if (!formularioAgregar.value.nit && !formularioAgregar.value.usuario) return 'Debe existir un NIT o un usuario de acceso.'
   if (modoNuevaEmpresa.value && !formularioAgregar.value.pass) return 'La contraseña de acceso es obligatoria.'
   if (!formularioAgregar.value.tipo_credencial) return 'Seleccione un tipo de credencial.'
-  if (![0, 1].includes(Number(formularioAgregar.value.tipo_credenciales))) return 'Seleccione si la credencial será Física o Digital.'
+  if (!eventoSoloDigital.value && ![0, 1].includes(Number(formularioAgregar.value.tipo_credenciales))) return 'Seleccione si la credencial será Física o Digital.'
   if (!Number.isInteger(Number(formularioAgregar.value.cantidad_credenciales)) || Number(formularioAgregar.value.cantidad_credenciales) <= 0) return 'La cantidad debe ser un número entero mayor a 0.'
   return ''
 }
@@ -366,7 +367,7 @@ const guardarEmpresa = async () => {
         usuario: formularioAgregar.value.usuario || null,
         pass: formularioAgregar.value.pass || null,
         tipo_credencial: formularioAgregar.value.tipo_credencial,
-        tipo_credenciales: Number(formularioAgregar.value.tipo_credenciales),
+        tipo_credenciales: eventoSoloDigital.value ? 1 : Number(formularioAgregar.value.tipo_credenciales),
         cantidad_credenciales: Number(formularioAgregar.value.cantidad_credenciales),
     })
     let csrfToken = await obtenerCsrfToken()
@@ -816,6 +817,7 @@ const feriaSeleccionadaInfo = computed(() => {
 
   return eventos.value.find(feria => Number(feria.id_feria) === Number(eventoSeleccionado.value)) || null
 })
+const eventoSoloDigital = computed(() => Number(eventoSeleccionado.value) === 19)
 
 const empresasPaginadas = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value
@@ -1336,7 +1338,8 @@ onMounted(cargarEventos)
           </div>
           <VRow>
             <VCol cols="12" md="4"><VSelect v-model="formularioAgregar.tipo_credencial" :items="tiposCredencial" item-title="title" item-value="value" label="Tipo de credencial" placeholder="Seleccionar tipo de credencial" :loading="loadingTipos" :disabled="!tiposCredencial.length" /></VCol>
-            <VCol cols="12" md="4"><VSelect v-model="formularioAgregar.tipo_credenciales" :items="[{ value: 0, title: 'Física' }, { value: 1, title: 'Digital' }]" label="Modalidad" placeholder="Seleccionar modalidad" /></VCol>
+            <VCol v-if="eventoSoloDigital" cols="12" md="4"><VTextField model-value="Digital" label="Modalidad" readonly /></VCol>
+            <VCol v-else cols="12" md="4"><VSelect v-model="formularioAgregar.tipo_credenciales" :items="[{ value: 0, title: 'Física' }, { value: 1, title: 'Digital' }]" label="Modalidad" placeholder="Seleccionar modalidad" /></VCol>
             <VCol cols="12" md="4"><VTextField v-model.number="formularioAgregar.cantidad_credenciales" label="Cantidad de credenciales" type="number" min="1" step="1" /></VCol>
           </VRow>
         </VCardText>

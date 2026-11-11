@@ -12,6 +12,7 @@ use App\Models\Empresa;
 use App\Models\EmpresaEventoCredencial;
 use App\Models\Feria;
 use App\Services\CredentialPhotoStorage;
+use App\Support\CredentialModality;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -240,7 +241,7 @@ class CredencialPinController extends Controller
                     'id_contrato' => $contratoId,
                     'id_empresa_evento_credencial' => $vinculacion?->id,
                     'tipo_credencial' => $tipo,
-                    'modalidad_credencial' => (int) ($vinculacion?->tipo_credenciales ?? $contrato?->tipo_credenciales ?? 1),
+                    'modalidad_credencial' => CredentialModality::normalize($idFeria, (int) ($vinculacion?->tipo_credenciales ?? $contrato?->tipo_credenciales ?? 1)),
                     'pin_hash' => hash('sha256', $pin),
                     'pin_encrypted' => Crypt::encryptString($pin),
                     'estado' => 'disponible',
@@ -309,7 +310,7 @@ class CredencialPinController extends Controller
                 $pdf->Cell($ancho - 10, 5, $this->textoPdf($pin->empresa?->nombre_empresa ?: 'Institución'), 0, 1, 'L');
                 $pdf->SetX($x + 5);
                 $pdf->SetFont('Arial', '', 8);
-                $pdf->Cell($ancho - 10, 5, $this->textoPdf($pin->tipo_credencial.' · '.((int) $pin->modalidad_credencial === 0 ? 'Física' : 'Digital')), 0, 1, 'L');
+                $pdf->Cell($ancho - 10, 5, $this->textoPdf($pin->tipo_credencial.' · '.CredentialModality::label((int) $pin->id_feria, (int) $pin->modalidad_credencial, true)), 0, 1, 'L');
                 $pdf->SetX($x + 5);
                 $pdf->SetFont('Arial', 'B', 22);
                 $pdf->Cell($ancho - 10, 14, $this->textoPdf(Crypt::decryptString($pin->pin_encrypted)), 0, 1, 'C');
@@ -518,7 +519,7 @@ class CredencialPinController extends Controller
             'evento' => $pin->feria?->nombre_feria,
             'empresa' => $pin->empresa?->nombre_empresa,
             'tipo_credencial' => $pin->tipo_credencial,
-            'modalidad' => (int) $pin->modalidad_credencial === 0 ? 'Física' : 'Digital',
+            'modalidad' => CredentialModality::label((int) $pin->id_feria, (int) $pin->modalidad_credencial, true),
         ]]);
     }
 
@@ -575,7 +576,7 @@ class CredencialPinController extends Controller
                 $idCredencial = DB::table('credenciales')->insertGetId([
                     'cod_credencial' => 'ACR-'.$pin->id_feria.'-PIN-'.$pin->id.'-'.$idExpositor,
                     'id_expositor' => $idExpositor, 'id_contrato' => $pin->id_contrato, 'id_empresa' => $pin->id_empresa, 'id_feria' => $pin->id_feria,
-                    'com_medio' => '', 'com_dias' => '', 'tipo_credencial' => $tipoCodigo, 'modalidad_credencial' => $pin->modalidad_credencial, 'estado_credencial' => 1, 'ingreso' => 0, 'created_at' => now(), 'updated_at' => now(),
+                    'com_medio' => '', 'com_dias' => '', 'tipo_credencial' => $tipoCodigo, 'modalidad_credencial' => CredentialModality::normalize((int) $pin->id_feria, (int) $pin->modalidad_credencial), 'estado_credencial' => 1, 'ingreso' => 0, 'created_at' => now(), 'updated_at' => now(),
                 ]);
                 $this->crearTokenQr($idCredencial);
                 if (DB::getSchemaBuilder()->hasTable('credencial_estado_historial')) {
@@ -625,7 +626,7 @@ class CredencialPinController extends Controller
             'empresa' => $pin->empresa?->nombre_empresa,
             'id_contrato' => $pin->id_contrato,
             'tipo_credencial' => $pin->tipo_credencial,
-            'modalidad' => (int) $pin->modalidad_credencial === 0 ? 'Física' : 'Digital',
+            'modalidad' => CredentialModality::label((int) $pin->id_feria, (int) $pin->modalidad_credencial, true),
             'estado' => $pin->estado,
             'nombre_destinatario' => $pin->nombre_destinatario,
             'celular_destinatario' => $pin->celular_destinatario,
