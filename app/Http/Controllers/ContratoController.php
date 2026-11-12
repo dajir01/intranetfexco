@@ -602,7 +602,7 @@ class ContratoController extends Controller
             $usuario = substr($usuario, 0, 10);
 
             // Generar contraseña aleatoria (sistema antiguo)
-            $password = $this->generarContrasena();
+            $password = $this->generarContrasenaEmpresa();
 
             // Crear la empresa con valores por defecto
             $empresa = new Empresa();
@@ -687,7 +687,12 @@ class ContratoController extends Controller
     /**
      * Generar contraseña aleatoria (sistema antiguo)
      */
-    private function generarContrasena()
+    private function generarContrasenaEmpresa(): string
+    {
+        return \Illuminate\Support\Str::random(6);
+    }
+
+    private function generarClaveContrato()
     {
         return \Illuminate\Support\Str::random(48);
     }
@@ -1198,7 +1203,7 @@ class ContratoController extends Controller
             );
 
             // 6. Generar clave de acceso (password)
-            $clave = $this->generarContrasena();
+            $clave = $this->generarClaveContrato();
 
             // 7. Calcular tiempo de reserva (5 días hábiles)
             $fechaCreacion = now();
