@@ -452,7 +452,7 @@ const crearMensajeWhatsapp = datos => [
   `- Usuario: ${datos.usuario}`,
   `- Contraseña: ${datos.password}`,
   `- Cantidad de credenciales: ${datos.cantidad_credenciales}`,
-  '- Link: https://plataforma.fexco.com.bo/',
+  '- Link: https://acreditacion.fexco.com.bo/',
   'Si tienes alguna duda, no dudes en escribirme.',
 ].join('\n')
 
