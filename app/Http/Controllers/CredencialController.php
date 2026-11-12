@@ -813,10 +813,21 @@ class CredencialController extends Controller
     {
         $feria = Feria::query()->select('id_feria', 'nombre_feria')->findOrFail($idFeria);
         $empresa = Empresa::query()
-            ->select('id_empresa', 'nombre_empresa', 'usuario', 'pass', 'telefono_responsable', 'email_representante')
+            ->select('id_empresa', 'nombre_empresa', 'nit', 'usuario', 'pass', 'telefono_responsable', 'email_representante')
             ->findOrFail($idEmpresa);
 
         abort_unless($this->empresaVinculadaAEvento($idFeria, $idEmpresa), 404);
+
+        $usuarioAcceso = $this->resolverUsuarioAccesoEmpresa($empresa->nit, $empresa->usuario);
+        if ($usuarioAcceso === null) {
+            Log::warning('No se pudo preparar el envío de accesos: la empresa no tiene NIT ni usuario de acceso.', [
+                'id_feria' => $idFeria,
+                'id_empresa' => $idEmpresa,
+                'id_usuario' => Auth::user()?->id_usuario,
+            ]);
+
+            abort(422, 'La empresa no tiene un NIT ni un usuario de acceso registrado.');
+        }
 
         $password = (string) $empresa->pass;
         if (trim($password) === '' || $this->contrasenaEsHash($password)) {
@@ -833,16 +844,6 @@ class CredencialController extends Controller
                 : 'La contraseña está protegida y no se puede compartir.');
         }
 
-        if (trim((string) $empresa->usuario) === '') {
-            Log::warning('No se pudo preparar el envío de accesos: la empresa no tiene usuario de acceso.', [
-                'id_feria' => $idFeria,
-                'id_empresa' => $idEmpresa,
-                'id_usuario' => Auth::user()?->id_usuario,
-            ]);
-
-            abort(422, 'La empresa no tiene un usuario de acceso registrado.');
-        }
-
         $detalleEmpresa = $this->detalleEmpresa($idFeria, $idEmpresa)->getData(true)['data'];
 
         return [
@@ -850,10 +851,24 @@ class CredencialController extends Controller
             'email' => $empresa->email_representante,
             'nombre_empresa' => $empresa->nombre_empresa,
             'nombre_feria' => $feria->nombre_feria,
-            'usuario' => $empresa->usuario,
+            ...$usuarioAcceso,
             'password' => $password,
             'cantidad_credenciales' => (int) ($detalleEmpresa['credenciales']['asignadas'] ?? 0),
         ];
+    }
+
+    private function resolverUsuarioAccesoEmpresa(?string $nit, ?string $usuario): ?array
+    {
+        $nit = trim((string) $nit);
+        if ($nit !== '') {
+            return ['usuario' => $nit, 'tipo_usuario' => 'NIT'];
+        }
+
+        $usuario = trim((string) $usuario);
+
+        return $usuario !== ''
+            ? ['usuario' => $usuario, 'tipo_usuario' => 'Usuario']
+            : null;
     }
 
     private function registrarAccionEnvioEmpresa(int $idFeria, int $idEmpresa, string $canal, string $accion, string $destinatario): int

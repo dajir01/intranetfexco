@@ -449,7 +449,7 @@ const eliminarVinculacion = async () => {
 const crearMensajeWhatsapp = datos => [
   `Hola, te estamos contactando para que puedas ingresar al Sistema de Acreditación del evento ${datos.nombre_feria}.`,
   `- Nombre Empresa: ${datos.nombre_empresa}`,
-  `- Usuario: ${datos.usuario}`,
+  `- ${datos.tipo_usuario || 'Usuario'}: ${datos.usuario}`,
   `- Contraseña: ${datos.password}`,
   `- Cantidad de credenciales: ${datos.cantidad_credenciales}`,
   '- Link: https://acreditacion.fexco.com.bo/',

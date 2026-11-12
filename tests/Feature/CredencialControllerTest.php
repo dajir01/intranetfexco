@@ -95,17 +95,36 @@ class CredencialControllerTest extends TestCase
         $html = (new AccesosEmpresaMail([
             'nombre_feria' => 'Expo Construcción 2026',
             'nombre_empresa' => 'Empresa de prueba',
-            'usuario' => 'usuario-prueba',
+            'usuario' => '123456789',
+            'tipo_usuario' => 'NIT',
             'password' => 'clave-prueba',
             'cantidad_credenciales' => 12,
         ]))->render();
 
         $this->assertStringContainsString('Expo Construcción 2026', $html);
         $this->assertStringContainsString('Empresa de prueba', $html);
-        $this->assertStringContainsString('usuario-prueba', $html);
+        $this->assertStringContainsString('NIT', $html);
+        $this->assertStringContainsString('123456789', $html);
         $this->assertStringContainsString('clave-prueba', $html);
         $this->assertStringContainsString('12', $html);
-        $this->assertStringContainsString('https://plataforma.fexco.com.bo/', $html);
+        $this->assertStringContainsString('https://acreditacion.fexco.com.bo/', $html);
+    }
+
+    public function test_company_access_identifier_prefers_nit_and_falls_back_to_username(): void
+    {
+        $controller = new CredencialController;
+        $method = (new ReflectionClass($controller))->getMethod('resolverUsuarioAccesoEmpresa');
+        $method->setAccessible(true);
+
+        $this->assertSame(
+            ['usuario' => '123456789', 'tipo_usuario' => 'NIT'],
+            $method->invoke($controller, '123456789', 'usuario-prueba')
+        );
+        $this->assertSame(
+            ['usuario' => 'usuario-prueba', 'tipo_usuario' => 'Usuario'],
+            $method->invoke($controller, ' ', 'usuario-prueba')
+        );
+        $this->assertNull($method->invoke($controller, null, ' '));
     }
 
     public function test_credential_delivery_history_masks_email_and_phone_recipients(): void
