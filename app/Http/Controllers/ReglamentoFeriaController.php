@@ -60,11 +60,13 @@ class ReglamentoFeriaController extends Controller
 
         $file = $validated['archivo'];
         $nombreOriginal = Str::limit($file->getClientOriginalName(), 255, '');
-        $nombreGuardado = Str::uuid() . '.pdf';
-        $ruta = "reglamentos-feria/{$feriaId}/{$nombreGuardado}";
-        $directorio = public_path("reglamentos-feria/{$feriaId}");
-        File::ensureDirectoryExists($directorio);
-        $file->move($directorio, $nombreGuardado);
+        $nombreGuardado = Str::uuid().'.pdf';
+        $directorio = 'reglamentos-feria';
+        $ruta = "{$directorio}/{$nombreGuardado}";
+        $rutaAlmacenada = Storage::disk('private')->putFileAs($directorio, $file, $nombreGuardado);
+        if (! $rutaAlmacenada) {
+            throw new \RuntimeException('No se pudo guardar el reglamento en almacenamiento privado.');
+        }
 
         try {
             $reglamento = ReglamentoFeria::create([
@@ -75,7 +77,7 @@ class ReglamentoFeriaController extends Controller
                 'ruta_archivo' => $ruta,
             ]);
         } catch (\Throwable $exception) {
-            File::delete(public_path($ruta));
+            Storage::disk('private')->delete($ruta);
             throw $exception;
         }
 
@@ -89,30 +91,23 @@ class ReglamentoFeriaController extends Controller
     public function download(int $id)
     {
         $reglamento = ReglamentoFeria::findOrFail($id);
-        $ruta = str_replace('\\', '/', ltrim($reglamento->ruta_archivo, '/'));
-        abort_unless(str_starts_with($ruta, 'reglamentos-feria/') && ! in_array('..', explode('/', $ruta), true), 404);
+        $ruta = $this->validarRutaReglamento((string) $reglamento->ruta_archivo);
 
-        $rutaPublica = public_path($ruta);
-        if (is_file($rutaPublica)) {
-            return response()->download($rutaPublica, $reglamento->nombre_archivo, [
+        if (Storage::disk('private')->exists($ruta)) {
+            return Storage::disk('private')->download($ruta, $reglamento->nombre_archivo, [
                 'Content-Type' => 'application/pdf',
                 'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, no-store',
             ]);
         }
 
-        abort_unless(Storage::disk('local')->exists($ruta), 404);
+        $rutaPublicaLegada = $this->rutaPublicaLegada($ruta);
+        abort_unless($rutaPublicaLegada, 404);
 
-        return response()->streamDownload(static function () use ($ruta): void {
-            $stream = Storage::disk('local')->readStream($ruta);
-            if ($stream === false) {
-                return;
-            }
-
-            fpassthru($stream);
-            fclose($stream);
-        }, $reglamento->nombre_archivo, [
+        return response()->download($rutaPublicaLegada, $reglamento->nombre_archivo, [
             'Content-Type' => 'application/pdf',
             'X-Content-Type-Options' => 'nosniff',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 
@@ -125,18 +120,15 @@ class ReglamentoFeriaController extends Controller
             $reglamento->delete();
 
             if ($rutaArchivo) {
-                $ruta = str_replace('\\', '/', ltrim($rutaArchivo, '/'));
-                if (! str_starts_with($ruta, 'reglamentos-feria/') || in_array('..', explode('/', $ruta), true)) {
-                    throw new \RuntimeException('La ruta del archivo PDF no es válida.');
+                $ruta = $this->validarRutaReglamento($rutaArchivo);
+
+                if (Storage::disk('private')->exists($ruta) && ! Storage::disk('private')->delete($ruta)) {
+                    throw new \RuntimeException('No se pudo eliminar el archivo PDF del almacenamiento.');
                 }
 
-                $rutaPublica = public_path($ruta);
-                if (is_file($rutaPublica)) {
-                    if (! File::delete($rutaPublica)) {
-                        throw new \RuntimeException('No se pudo eliminar el archivo PDF del almacenamiento.');
-                    }
-                } elseif (Storage::disk('local')->exists($ruta) && ! Storage::disk('local')->delete($ruta)) {
-                    throw new \RuntimeException('No se pudo eliminar el archivo PDF del almacenamiento.');
+                $rutaPublicaLegada = $this->rutaPublicaLegada($ruta);
+                if ($rutaPublicaLegada && ! File::delete($rutaPublicaLegada)) {
+                    throw new \RuntimeException('No se pudo eliminar el archivo PDF público legado.');
                 }
             }
         });
@@ -145,5 +137,30 @@ class ReglamentoFeriaController extends Controller
             'success' => true,
             'message' => 'Reglamento y archivo PDF eliminados correctamente.',
         ]);
+    }
+
+    private function validarRutaReglamento(string $rutaArchivo): string
+    {
+        $ruta = str_replace('\\', '/', ltrim($rutaArchivo, '/'));
+        $segmentos = explode('/', $ruta);
+        abort_unless(
+            str_starts_with($ruta, 'reglamentos-feria/')
+                && ! in_array('..', $segmentos, true)
+                && strtolower(pathinfo($ruta, PATHINFO_EXTENSION)) === 'pdf',
+            404
+        );
+
+        return $ruta;
+    }
+
+    private function rutaPublicaLegada(string $ruta): ?string
+    {
+        $raiz = realpath(public_path('reglamentos-feria'));
+        $archivo = realpath(public_path($ruta));
+        if (! $raiz || ! $archivo || ! str_starts_with($archivo, $raiz.DIRECTORY_SEPARATOR) || ! is_file($archivo)) {
+            return null;
+        }
+
+        return $archivo;
     }
 }
