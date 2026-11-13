@@ -47,7 +47,7 @@ return [
 
         'credential_photos' => [
             'driver' => 'local',
-            'root' => env('CREDENTIAL_PHOTOS_PATH', storage_path('app/private/accredited-photos')),
+            'root' => env('CREDENTIAL_PHOTOS_PATH') ?: storage_path('app/private/accredited-photos'),
             'throw' => true,
             'report' => false,
         ],
