@@ -1782,6 +1782,7 @@ class CredencialController extends Controller
                 ->join('credenciales', 'credenciales.id_credencial', '=', 'descarga.id_credencial')
                 ->join('eventos', 'eventos.id_feria', '=', 'credenciales.id_feria')
                 ->leftJoin('usuarios', 'usuarios.id_usuario', '=', 'descarga.id_usuario')
+                ->leftJoin('empresas as empresa_descarga', 'empresa_descarga.id_empresa', '=', 'descarga.id_empresa')
                 ->where('credenciales.id_empresa', $credencial->id_empresa)
                 ->where('credenciales.id_expositor', $credencial->id_expositor)
                 ->when(! empty($validated['id_feria']), fn ($query) => $query->where('credenciales.id_feria', $validated['id_feria']))
@@ -1790,6 +1791,7 @@ class CredencialController extends Controller
                     'descarga.id_credencial',
                     'descarga.tipo_descarga',
                     'descarga.id_usuario',
+                    'empresa_descarga.nombre_empresa',
                     'descarga.created_at',
                     'eventos.id_feria',
                     'eventos.nombre_feria',
@@ -1813,10 +1815,11 @@ class CredencialController extends Controller
                     'version_qr_anterior' => null,
                     'version_qr_nueva' => null,
                     'motivo' => match ($descarga->tipo_descarga) {
-                        'lote_zip' => 'Archivo ZIP digital descargado',
+                        'lote_zip', 'png_lote' => 'Archivo ZIP digital descargado',
                         'envio_email' => 'Credencial digital enviada por correo electrónico',
                         'impresion' => 'Credencial física generada para impresión',
-                        default => 'PDF digital individual descargado',
+                        'png_individual' => 'Imagen digital individual descargada',
+                        default => 'Salida digital registrada',
                     },
                     'observaciones' => null,
                     'id_usuario' => $descarga->id_usuario,
@@ -1826,6 +1829,7 @@ class CredencialController extends Controller
                     'fecha_inicio' => $descarga->fecha_inicio,
                     'nombre_usuario' => $descarga->nombre_usuario,
                     'nick_usuario' => $descarga->nick_usuario,
+                    'nombre_empresa' => $descarga->nombre_empresa,
                 ]);
         }
 
@@ -1868,7 +1872,7 @@ class CredencialController extends Controller
                         'estado_anterior' => in_array($registro->accion, ['descarga_digital', 'envio_email', 'impresion_fisica'], true) ? '—' : $this->estadoCredencialLabel((int) $registro->estado_anterior),
                         'estado_nuevo' => in_array($registro->accion, ['descarga_digital', 'envio_email', 'impresion_fisica'], true) ? '—' : $this->estadoCredencialLabel((int) $registro->estado_nuevo),
                         'motivo' => trim($registro->motivo.($registro->observaciones ? ' - '.$registro->observaciones : '')),
-                        'usuario' => $registro->nombre_usuario ?: $registro->nick_usuario ?: ($registro->id_usuario ? 'Usuario #'.$registro->id_usuario : 'Usuario no disponible'),
+                        'usuario' => $registro->nombre_usuario ?: $registro->nick_usuario ?: ($registro->nombre_empresa ?? null) ?: ($registro->id_usuario ? 'Usuario #'.$registro->id_usuario : 'Usuario no disponible'),
                         'fecha' => $registro->created_at,
                     ])->values(),
                 ];
