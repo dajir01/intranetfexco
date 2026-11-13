@@ -28,6 +28,11 @@ export function useContratoValidation() {
   
   const nitRule = v => {
     if (!v || String(v).trim() === '') return 'El NIT es obligatorio'
+
+    if (!/^\d+$/.test(String(v))) {
+      return 'El NIT debe contener solo números'
+    }
+
     return true
   }
   
