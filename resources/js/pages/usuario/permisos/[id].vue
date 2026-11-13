@@ -252,6 +252,7 @@ const ACTION_LABELS = {
   'credenciales.empresas.ver': 'Ver empresas con credenciales',
   'credenciales.empresas.crear': 'Agregar empresas y credenciales',
   'credenciales.empresas.eliminar': 'Eliminar vinculación de empresa',
+  'credenciales.empresas.plataforma': 'Gestionar visibilidad de tipos sin contrato en Plataforma',
   'credenciales.empresas.whatsapp.ver': 'Ver historial de WhatsApp de empresas',
   'credenciales.empresas.whatsapp.enviar': 'Enviar accesos de empresa por WhatsApp',
   'credenciales.empresas.email.ver': 'Ver historial de correo de empresas',

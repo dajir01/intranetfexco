@@ -211,6 +211,7 @@ class CredencialController extends Controller
                     'tipo_credencial' => $vinculacion->tipo_credencial,
                     'modalidad_credencial' => CredentialModality::label((int) $vinculacion->id_feria, $vinculacion->tipo_credenciales === null ? null : (int) $vinculacion->tipo_credenciales),
                     'codigo_contrato' => 'Sin contrato',
+                    'visible_en_plataforma' => (bool) $vinculacion->visible_en_plataforma,
                     'credenciales_asignadas' => (int) $vinculacion->cantidad_credenciales + $adicionales,
                     'credenciales_utilizadas' => $credencialesUtilizadas,
                 ];
@@ -268,6 +269,7 @@ class CredencialController extends Controller
                         'codigo_contrato' => $empresa['codigo_contrato'],
                         'modalidad_credencial' => $empresa['modalidad_credencial'] ?? null,
                         'tipo_credencial' => $empresa['tipo_credencial'],
+                        'visible_en_plataforma' => $empresa['id_contrato'] !== null || (bool) ($empresa['visible_en_plataforma'] ?? false),
                         'pabellon' => $ubicacionesContrato->get($empresa['id_contrato'])['pabellon'] ?? null,
                         'stands' => $ubicacionesContrato->get($empresa['id_contrato'])['stands'] ?? [],
                         'credenciales_asignadas' => $empresa['credenciales_asignadas'],
@@ -3200,6 +3202,7 @@ class CredencialController extends Controller
                 'tipo_credenciales' => CredentialModality::normalize((int) $feria->id_feria, (int) $validated['tipo_credenciales']),
                 'cantidad_credenciales' => $validated['cantidad_credenciales'],
                 'id_contrato' => null,
+                'visible_en_plataforma' => false,
                 'id_usuario_creacion' => Auth::user()?->id_usuario,
             ]);
 
@@ -3218,18 +3221,58 @@ class CredencialController extends Controller
                     'id' => $result['vinculacion']->id,
                     'id_feria' => $result['vinculacion']->id_feria,
                     'tipo_credencial' => $result['vinculacion']->tipo_credencial,
+                    'visible_en_plataforma' => false,
                 ],
             ],
         ], 201);
     }
 
+    public function actualizarVisibilidadPlataforma(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'visible_en_plataforma' => ['required', 'boolean'],
+        ]);
+        $vinculacion = EmpresaEventoCredencial::query()->findOrFail($id);
+
+        if ($vinculacion->id_contrato !== null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'La visibilidad de las vinculaciones con contrato no se puede modificar.',
+            ], 422);
+        }
+
+        $vinculacion->visible_en_plataforma = (bool) $validated['visible_en_plataforma'];
+        $vinculacion->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $vinculacion->visible_en_plataforma
+                ? 'Tipo de credencial habilitado en Plataforma.'
+                : 'Tipo de credencial ocultado en Plataforma.',
+            'data' => [
+                'id_vinculacion' => (int) $vinculacion->id,
+                'visible_en_plataforma' => $vinculacion->visible_en_plataforma,
+            ],
+        ]);
+    }
+
     public function destroyEmpresaVinculacion(int $id): JsonResponse
     {
         $vinculacion = EmpresaEventoCredencial::query()->findOrFail($id);
+
+        if ($vinculacion->id_contrato !== null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Solo se pueden eliminar vinculaciones directas sin contrato.',
+            ], 422);
+        }
+
         $credenciales = DB::table('credenciales')
             ->where('id_empresa', $vinculacion->id_empresa)
             ->where('id_feria', $vinculacion->id_feria)
             ->where('tipo_credencial', $this->tipoCredencialCodigo($vinculacion->tipo_credencial))
+            ->whereNull('id_contrato')
+            ->where('estado_credencial', '!=', 3)
             ->count();
 
         if ($credenciales > 0) {
@@ -3292,9 +3335,14 @@ class CredencialController extends Controller
 
         return (int) DB::table('cred_adicionales')
             ->where('feria', $idFeria)
-            ->where('id_empresa', $idEmpresa)
-            ->when($idContrato, fn ($query) => $query->where('contrato', $idContrato), fn ($query) => $query->whereNull('contrato'))
-            ->when($idVinculacion, fn ($query) => $query->where('id_empresa_evento_credencial', $idVinculacion), fn ($query) => $query->whereNull('id_empresa_evento_credencial'))
+            ->when(
+                $idContrato,
+                fn ($query) => $query->where('contrato', $idContrato)
+                    ->where(fn ($query) => $query->where('id_empresa', $idEmpresa)->orWhereNull('id_empresa')),
+                fn ($query) => $query->where('id_empresa', $idEmpresa)
+                    ->whereNull('contrato')
+                    ->when($idVinculacion, fn ($nested) => $nested->where('id_empresa_evento_credencial', $idVinculacion), fn ($nested) => $nested->whereNull('id_empresa_evento_credencial')),
+            )
             ->selectRaw($movimientoSql)
             ->value('total');
     }

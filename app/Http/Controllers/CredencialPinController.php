@@ -677,7 +677,8 @@ class CredencialPinController extends Controller
         return (int) DB::table('cred_adicionales')->where('feria', $idFeria)
             ->when(
                 $idContrato,
-                fn ($query) => $query->where('contrato', $idContrato),
+                fn ($query) => $query->where('contrato', $idContrato)
+                    ->where(fn ($nested) => $nested->where('id_empresa', $idEmpresa)->orWhereNull('id_empresa')),
                 fn ($query) => $query->where('id_empresa', $idEmpresa)
                     ->whereNull('contrato')
                     ->when($idVinculacion, fn ($nested) => $nested->where('id_empresa_evento_credencial', $idVinculacion), fn ($nested) => $nested->whereNull('id_empresa_evento_credencial')),

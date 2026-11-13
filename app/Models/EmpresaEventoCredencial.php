@@ -17,12 +17,14 @@ class EmpresaEventoCredencial extends Model
         'cantidad_credenciales',
         'id_contrato',
         'estado',
+        'visible_en_plataforma',
         'id_usuario_creacion',
     ];
 
     protected $casts = [
         'cantidad_credenciales' => 'integer',
         'estado' => 'boolean',
+        'visible_en_plataforma' => 'boolean',
     ];
 
     public function empresa(): BelongsTo

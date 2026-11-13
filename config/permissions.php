@@ -76,6 +76,7 @@ return [
         'credenciales.empresas.crear' => ['admin', 'comercial_access'],
         'credenciales.empresas.eliminar' => ['admin', 'comercial_access'],
         'credenciales.empresas.exportar' => ['admin', 'comercial_access'],
+        'credenciales.empresas.plataforma' => ['admin', 'comercial_access'],
         'credenciales.empresas.whatsapp.ver' => ['admin', 'comercial_access'],
         'credenciales.empresas.whatsapp.enviar' => ['admin', 'comercial_access'],
         'credenciales.empresas.email.ver' => ['admin', 'comercial_access'],

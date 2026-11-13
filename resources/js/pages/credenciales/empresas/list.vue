@@ -50,6 +50,7 @@ const successDialog = ref('')
 const dialogEliminar = ref(false)
 const empresaEliminar = ref(null)
 const eliminando = ref(false)
+const visibilidadPlataformaActualizando = ref({})
 const whatsappEnviandoEmpresaId = ref(null)
 const emailEnviandoEmpresaId = ref(null)
 const notificacionEnvio = ref('')
@@ -413,9 +414,15 @@ watch(dialogAgregar, abierto => {
   if (!abierto) limpiarFormularioAgregar()
 })
 
-const abrirDialogEliminar = item => {
-  if (!item.id_vinculacion || !can('credenciales.empresas.eliminar')) return
-  empresaEliminar.value = item
+const abrirDialogEliminar = (empresa, vinculacion) => {
+  if (
+    !vinculacion?.id_vinculacion
+    || vinculacion.id_contrato !== null
+    || Number(vinculacion.credenciales_utilizadas ?? 0) !== 0
+    || !can('credenciales.empresas.eliminar')
+  ) return
+
+  empresaEliminar.value = { ...empresa, ...vinculacion, nombre_empresa: empresa.nombre_empresa }
   dialogEliminar.value = true
 }
 
@@ -443,6 +450,45 @@ const eliminarVinculacion = async () => {
     error.value = err.message
   } finally {
     eliminando.value = false
+  }
+}
+
+const cambiarVisibilidadPlataforma = async (vinculacion, visible) => {
+  const id = Number(vinculacion?.id_vinculacion)
+  if (
+    !id
+    || vinculacion.id_contrato !== null
+    || typeof visible !== 'boolean'
+    || !can('credenciales.empresas.plataforma')
+    || visibilidadPlataformaActualizando.value[id]
+  ) return
+
+  visibilidadPlataformaActualizando.value = { ...visibilidadPlataformaActualizando.value, [id]: true }
+
+  try {
+    const csrfToken = await obtenerCsrfToken()
+    const response = await fetch(`/credenciales/empresas/vinculaciones/${id}/visibilidad-plataforma`, {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': csrfToken,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ visible_en_plataforma: visible }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload.message || 'No se pudo actualizar la visibilidad en Plataforma')
+
+    vinculacion.visible_en_plataforma = Boolean(payload.data?.visible_en_plataforma)
+    notificacionEnvio.value = payload.message
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    const pendientes = { ...visibilidadPlataformaActualizando.value }
+    delete pendientes[id]
+    visibilidadPlataformaActualizando.value = pendientes
   }
 }
 
@@ -1040,15 +1086,60 @@ onMounted(cargarEventos)
           </template>
           <template #item.tipo_credencial="{ item }">
             <div class="credenciales-tipos-columna">
-              <VChip
+              <div
                 v-for="contrato in item.contratos"
-                :key="`tipo-${contrato.id_contrato}-${contrato.tipo_credencial}-${contrato.codigo_contrato}`"
-                :color="getTipoCredencialColor(contrato.tipo_credencial)"
-                variant="tonal"
-                size="small"
+                :key="`tipo-${contrato.id_vinculacion ?? contrato.id_contrato}-${contrato.tipo_credencial}`"
+                class="credencial-tipo-plataforma"
               >
-                {{ contrato.tipo_credencial }}
-              </VChip>
+                <VChip
+                  :color="getTipoCredencialColor(contrato.tipo_credencial)"
+                  variant="tonal"
+                  size="small"
+                >
+                  {{ contrato.tipo_credencial }}
+                </VChip>
+                <div class="d-flex align-center gap-1">
+                  <VTooltip
+                    v-if="contrato.id_vinculacion && contrato.id_contrato === null && can('credenciales.empresas.plataforma')"
+                    location="top"
+                  >
+                    <template #activator="{ props }">
+                      <VSwitch
+                        v-bind="props"
+                        :model-value="Boolean(contrato.visible_en_plataforma)"
+                        :loading="visibilidadPlataformaActualizando[contrato.id_vinculacion]"
+                        :disabled="!!visibilidadPlataformaActualizando[contrato.id_vinculacion]"
+                        color="success"
+                        density="compact"
+                        hide-details
+                        label="Plataforma"
+                        :aria-label="`${contrato.visible_en_plataforma ? 'Ocultar' : 'Mostrar'} ${contrato.tipo_credencial} en Plataforma`"
+                        @update:model-value="cambiarVisibilidadPlataforma(contrato, $event)"
+                      />
+                    </template>
+                    <span>{{ contrato.visible_en_plataforma ? `Ocultar ${contrato.tipo_credencial} en Plataforma` : `Mostrar ${contrato.tipo_credencial} en Plataforma` }}</span>
+                  </VTooltip>
+                  <VTooltip
+                    v-if="contrato.id_vinculacion && contrato.id_contrato === null && Number(contrato.credenciales_utilizadas ?? 0) === 0 && can('credenciales.empresas.eliminar')"
+                    location="top"
+                  >
+                    <template #activator="{ props }">
+                      <VBtn
+                        v-bind="props"
+                        icon
+                        variant="text"
+                        size="small"
+                        color="error"
+                        :aria-label="`Eliminar vínculo ${contrato.tipo_credencial} de ${item.nombre_empresa}`"
+                        @click="abrirDialogEliminar(item, contrato)"
+                      >
+                        <VIcon icon="tabler-trash" />
+                      </VBtn>
+                    </template>
+                    <span>Eliminar vínculo de {{ contrato.tipo_credencial }}</span>
+                  </VTooltip>
+                </div>
+              </div>
               <VChip v-if="item.contratos.length === 0" :color="getTipoCredencialColor(item.tipo_credencial)" variant="tonal" size="small">
                 {{ item.tipo_credencial }}
               </VChip>
@@ -1163,14 +1254,6 @@ onMounted(cargarEventos)
                   </VBtn>
                 </template>
                 <span>Historial: WhatsApp {{ item.whatsappEnvios || 0 }} acciones · Correo {{ item.emailEnvios || 0 }} envíos</span>
-              </VTooltip>
-              <VTooltip v-if="item.id_vinculacion && can('credenciales.empresas.eliminar')" location="top">
-                <template #activator="{ props }">
-                  <VBtn v-bind="props" icon variant="text" size="small" color="error" @click="abrirDialogEliminar(item)">
-                    <VIcon icon="tabler-trash" />
-                  </VBtn>
-                </template>
-                <span>Eliminar empresa del evento</span>
               </VTooltip>
             </div>
           </template>
@@ -1429,7 +1512,7 @@ onMounted(cargarEventos)
         <VDivider />
         <VCardText class="credencial-dialog-body pa-5">
           <VAlert type="warning" variant="tonal" class="mb-4">
-            ¿Deseas eliminar la vinculación de <strong>{{ empresaEliminar?.nombre_empresa || 'esta empresa' }}</strong> para el evento seleccionado?
+            ¿Deseas eliminar la vinculación de <strong>{{ empresaEliminar?.nombre_empresa || 'esta empresa' }}</strong> para el tipo <strong>{{ empresaEliminar?.tipo_credencial }}</strong> en el evento seleccionado?
           </VAlert>
           <p class="text-body-2 text-medium-emphasis mb-0">La empresa y sus datos generales no serán eliminados.</p>
         </VCardText>
@@ -1542,6 +1625,15 @@ onMounted(cargarEventos)
 
 .credenciales-tipos-columna {
   align-items: flex-start;
+}
+
+.credencial-tipo-plataforma {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  inline-size: 100%;
+  min-inline-size: 180px;
 }
 
 @media (max-width: 600px) {

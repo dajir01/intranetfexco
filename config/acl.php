@@ -159,6 +159,7 @@ return [
         ['module' => 'credenciales.empresas', 'action' => 'crear'],
         ['module' => 'credenciales.empresas', 'action' => 'eliminar'],
         ['module' => 'credenciales.empresas', 'action' => 'exportar'],
+        ['module' => 'credenciales.empresas', 'action' => 'plataforma'],
         ['module' => 'credenciales.empresas.whatsapp', 'action' => 'ver'],
         ['module' => 'credenciales.empresas.whatsapp', 'action' => 'enviar'],
         ['module' => 'credenciales.empresas.email', 'action' => 'ver'],

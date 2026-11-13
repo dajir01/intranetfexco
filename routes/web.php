@@ -112,6 +112,9 @@ Route::middleware(['auth', 'ability:credenciales.empresas.ver'])->group(function
     Route::get('/credenciales/acreditados/{idCredencial}/descargas', [CredencialController::class, 'historialDescargasDigitales'])->whereNumber('idCredencial')->middleware('permission:credenciales.historial.ver');
     Route::post('/credenciales/acreditados/resumen-salidas', [CredencialController::class, 'resumenSalidasCredenciales']);
     Route::post('/credenciales/empresas', [CredencialController::class, 'storeEmpresa'])->middleware('permission:credenciales.empresas.crear');
+    Route::patch('/credenciales/empresas/vinculaciones/{id}/visibilidad-plataforma', [CredencialController::class, 'actualizarVisibilidadPlataforma'])
+        ->whereNumber('id')
+        ->middleware('permission:credenciales.empresas.plataforma');
     Route::delete('/credenciales/empresas/vinculaciones/{id}', [CredencialController::class, 'destroyEmpresaVinculacion'])
         ->whereNumber('id')
         ->middleware('permission:credenciales.empresas.eliminar');
