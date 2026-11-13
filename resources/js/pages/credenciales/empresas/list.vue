@@ -1288,14 +1288,19 @@ onMounted(cargarEventos)
             <strong>Contacto:</strong> +{{ telefonoWhatsappVistaPrevia }}
           </div>
 
-          <VAlert type="info" variant="tonal" class="mb-4">
+          <VAlert v-if="telefonoWhatsappVistaPrevia" type="info" variant="tonal" class="mb-4">
             El número tiene formato válido, pero el sistema no puede comprobar si está registrado en WhatsApp. Al copiar, se registrará la acción; esto no confirma que el mensaje se haya enviado.
+          </VAlert>
+          <VAlert v-else type="info" variant="tonal" class="mb-4">
+            El contacto no tiene un teléfono válido registrado. Puedes copiar el mensaje igualmente y compartirlo manualmente.
           </VAlert>
           <VAlert v-if="errorCopiarWhatsapp" type="error" variant="tonal" class="mb-4">
             {{ errorCopiarWhatsapp }}
           </VAlert>
           <VAlert v-if="mensajeWhatsappCopiado" type="success" variant="tonal" class="mb-4">
-            Mensaje copiado y acción registrada en el historial. Pégalo en WhatsApp para enviarlo.
+            {{ telefonoWhatsappVistaPrevia
+              ? 'Mensaje copiado y acción registrada en el historial. Pégalo en WhatsApp para enviarlo.'
+              : 'Mensaje copiado y acción registrada en el historial. Compártelo manualmente por el medio que prefieras.' }}
           </VAlert>
 
           <div v-if="preparandoCopiaWhatsapp" class="text-center py-6">

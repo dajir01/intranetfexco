@@ -647,14 +647,15 @@ class CredencialController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $this->datosAccesoWhatsappEmpresa($idFeria, $idEmpresa),
+            'data' => $this->datosAccesoWhatsappEmpresa($idFeria, $idEmpresa, false),
         ])->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
     }
 
     public function registrarCopiaWhatsappEmpresa(int $idFeria, int $idEmpresa): JsonResponse
     {
-        $datos = $this->datosAccesoWhatsappEmpresa($idFeria, $idEmpresa);
-        $envioId = $this->registrarAccionEnvioEmpresa($idFeria, $idEmpresa, 'whatsapp', 'copiado', $datos['telefono']);
+        $datos = $this->datosAccesoWhatsappEmpresa($idFeria, $idEmpresa, false);
+        $telefono = $datos['telefono'] ?? '';
+        $envioId = $this->registrarAccionEnvioEmpresa($idFeria, $idEmpresa, 'whatsapp', 'copiado', $telefono);
 
         Log::info('Mensaje de accesos de empresa copiado para WhatsApp.', [
             'id_envio' => $envioId,
@@ -662,7 +663,7 @@ class CredencialController extends Controller
             'id_empresa' => $idEmpresa,
             'id_usuario' => Auth::user()?->id_usuario,
             'campo_telefono' => 'telefono_responsable',
-            'destinatario_ultimos_digitos' => substr($datos['telefono'], -4),
+            'destinatario_ultimos_digitos' => $telefono !== '' ? substr($telefono, -4) : null,
             'cantidad_credenciales' => $datos['cantidad_credenciales'],
             'accion' => 'copiado',
         ]);
@@ -785,17 +786,12 @@ class CredencialController extends Controller
         ])->header('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
     }
 
-    private function datosAccesoWhatsappEmpresa(int $idFeria, int $idEmpresa): array
+    private function datosAccesoWhatsappEmpresa(int $idFeria, int $idEmpresa, bool $requiereTelefonoValido = true): array
     {
         $datos = $this->datosCredencialesEmpresa($idFeria, $idEmpresa);
+        $telefono = $this->normalizarTelefonoWhatsapp($datos['telefono']);
 
-        try {
-            $telefono = $this->normalizarCelular($datos['telefono']);
-        } catch (ValidationException) {
-            $telefono = null;
-        }
-
-        if ($telefono === null) {
+        if ($telefono === null && $requiereTelefonoValido) {
             Log::warning('No se pudo preparar mensaje de WhatsApp: la persona de contacto no tiene un teléfono válido.', [
                 'id_feria' => $idFeria,
                 'id_empresa' => $idEmpresa,
@@ -808,7 +804,18 @@ class CredencialController extends Controller
 
         unset($datos['email']);
 
-        return [...$datos, 'telefono' => preg_replace('/\D+/', '', $telefono)];
+        return [...$datos, 'telefono' => $telefono];
+    }
+
+    private function normalizarTelefonoWhatsapp(?string $telefono): ?string
+    {
+        try {
+            $normalizado = $this->normalizarCelular($telefono);
+        } catch (ValidationException) {
+            return null;
+        }
+
+        return $normalizado === null ? null : preg_replace('/\D+/', '', $normalizado);
     }
 
     private function datosCredencialesEmpresa(int $idFeria, int $idEmpresa): array
@@ -1003,7 +1010,7 @@ class CredencialController extends Controller
         if ($canal === 'whatsapp') {
             $digitos = preg_replace('/\D+/', '', $destinatario) ?? '';
 
-            return '+***'.substr($digitos, -4);
+            return $digitos === '' ? 'Sin teléfono válido' : '+***'.substr($digitos, -4);
         }
 
         [$local, $dominio] = array_pad(explode('@', $destinatario, 2), 2, '');

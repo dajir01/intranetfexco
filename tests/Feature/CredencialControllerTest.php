@@ -167,6 +167,26 @@ class CredencialControllerTest extends TestCase
         $this->assertSame('+5491123456789', $method->invoke($controller, '+54 9 11 2345-6789'));
     }
 
+    public function test_it_returns_no_whatsapp_recipient_when_the_company_phone_is_invalid(): void
+    {
+        $controller = new CredencialController;
+        $method = (new ReflectionClass($controller))->getMethod('normalizarTelefonoWhatsapp');
+        $method->setAccessible(true);
+
+        $this->assertSame('59168481034', $method->invoke($controller, '6848 1034'));
+        $this->assertNull($method->invoke($controller, 'invalid'));
+        $this->assertNull($method->invoke($controller, null));
+    }
+
+    public function test_whatsapp_history_marks_missing_phone_numbers_as_invalid(): void
+    {
+        $controller = new CredencialController;
+        $method = (new ReflectionClass($controller))->getMethod('enmascararDestinatario');
+        $method->setAccessible(true);
+
+        $this->assertSame('Sin teléfono válido', $method->invoke($controller, 'whatsapp', ''));
+    }
+
     public function test_public_auto_accreditation_rejects_pins_that_are_not_six_characters(): void
     {
         foreach (['A7K2P', 'A7K2P9M4Q7TX'] as $pin) {
