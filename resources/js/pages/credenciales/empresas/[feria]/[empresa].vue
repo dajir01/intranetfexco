@@ -1397,7 +1397,6 @@ onBeforeUnmount(() => {
                     size="small"
                     color="success"
                     rounded="circle"
-                    :disabled="Number(registroUnicoTipo(tipo).credenciales_disponibles) === 0"
                     @click="abrirAdicionales(registroUnicoTipo(tipo))"
                   >
                     <VIcon icon="tabler-user-plus" />
