@@ -1140,7 +1140,7 @@ class CredencialController extends Controller
         $validated['nombre'] = $this->normalizarNombre($validated['nombre'] ?? '');
         $celular = $this->normalizarCelular($validated['celular'] ?? null);
 
-        $resultado = DB::transaction(function () use ($request, $validated, $celular, $idFeria, $idEmpresa): array {
+        $resultado = DB::transaction(function () use ($request, $validated, $celular, $idFeria, $idEmpresa, $photoStorage): array {
             $feria = Feria::query()->lockForUpdate()->findOrFail($idFeria);
             $tipo = trim($validated['tipo_credencial']);
             if (! $this->tiposCredenciales($feria->tipo_credenciales)->contains($tipo)) {
