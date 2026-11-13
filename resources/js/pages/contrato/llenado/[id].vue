@@ -29,6 +29,10 @@ const {
   emailOptionalRule,
   phoneRule,
   nitRule,
+  normalizarNit,
+  bloquearCaracterNoNumerico,
+  bloquearPegadoNoNumerico,
+  bloquearEntradaNoNumerica,
   autocompleteIdRule,
   textareaRequiredRule,
   validarFormularioCompleto,
@@ -233,6 +237,13 @@ const formulario = ref({
   monto_tercer_pago: 0,
 })
 
+const nitNumerico = computed({
+  get: () => formulario.value.nit,
+  set: valor => {
+    formulario.value.nit = normalizarNit(valor)
+  },
+})
+
 // ==================== CATÁLOGOS ====================
 const catalogos = ref({
   paises: [],
@@ -387,7 +398,7 @@ const cargarDatos = async () => {
       // Popular formulario con datos existentes
       if (empresa.value) {
         formulario.value.nombre_empresa = empresa.value.nombre_empresa || ''
-        formulario.value.nit = empresa.value.nit || ''
+        formulario.value.nit = normalizarNit(empresa.value.nit)
         formulario.value.direccion = empresa.value.direccion || ''
         formulario.value.telefono = empresa.value.telefono || ''
         formulario.value.fax = empresa.value.fax || ''
@@ -1250,10 +1261,14 @@ onMounted(() => {
                     </VCol>
                     <VCol cols="12" md="3">
                       <VTextField
-                        v-model="formulario.nit"
+                        v-model="nitNumerico"
                         label="NIT *"
+                        inputmode="numeric"
                         variant="outlined"
                         dense
+                        @keydown="bloquearCaracterNoNumerico"
+                        @paste="bloquearPegadoNoNumerico"
+                        @beforeinput="bloquearEntradaNoNumerica"
                         :rules="[nitRule]"
                       />
                     </VCol>

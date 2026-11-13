@@ -35,6 +35,22 @@ export function useContratoValidation() {
 
     return true
   }
+
+  const normalizarNit = valor => String(valor ?? '').replace(/\D/g, '')
+
+  const bloquearCaracterNoNumerico = event => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return
+    if (!/^\d$/.test(event.key)) event.preventDefault()
+  }
+
+  const bloquearPegadoNoNumerico = event => {
+    const textoPegado = event.clipboardData?.getData('text')
+    if (textoPegado && /\D/.test(textoPegado)) event.preventDefault()
+  }
+
+  const bloquearEntradaNoNumerica = event => {
+    if (event.data && /\D/.test(event.data)) event.preventDefault()
+  }
   
   const autocompleteIdRule = v => {
     return (v !== null && v !== undefined && v !== '') || 'Debe seleccionar una opción válida'
@@ -227,6 +243,10 @@ export function useContratoValidation() {
     emailOptionalRule,
     phoneRule,
     nitRule,
+    normalizarNit,
+    bloquearCaracterNoNumerico,
+    bloquearPegadoNoNumerico,
+    bloquearEntradaNoNumerica,
     autocompleteIdRule,
     textareaRequiredRule,
     
