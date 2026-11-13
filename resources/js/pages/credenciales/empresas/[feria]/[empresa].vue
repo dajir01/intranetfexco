@@ -1936,9 +1936,9 @@ onBeforeUnmount(() => {
                 <VCol cols="12" class="d-flex align-center justify-center gap-4 pt-4">
                   <input ref="inputFoto" class="d-none" type="file" accept="image/png,image/jpeg" @change="cambiarFoto">
                   <button type="button" class="acreditacion-photo-picker" :disabled="!camposAcreditadoHabilitados || procesandoFoto" @click="abrirSelectorFoto">
-                    <VImg v-if="vistaPreviaFoto" :src="vistaPreviaFoto" cover class="acreditacion-photo-preview" />
+                    <VImg v-if="vistaPreviaFoto" :src="vistaPreviaFoto" class="acreditacion-photo-preview" />
                     <VProgressCircular v-if="procesandoFoto" indeterminate color="primary" size="36" />
-                    <VIcon v-else icon="tabler-camera" size="40" />
+                    <VIcon v-else-if="!vistaPreviaFoto" icon="tabler-camera" size="40" />
                   </button>
                   <div>
                     <p class="text-body-1 font-weight-medium mb-1">Fotografía *</p>
