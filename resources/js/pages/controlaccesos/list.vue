@@ -3,6 +3,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { watchDebounced } from '@vueuse/core'
 
 definePage({
   meta: {
@@ -22,7 +23,7 @@ if (!puedeVer.value)
 
 const eventos = ref([])
 const operadores = ref([])
-const resumen = ref({ ingresos: 0, personas_unicas: 0, por_credencial: [] })
+const resumen = ref({ ingresos: 0, credenciales_unicas: 0, por_credencial: [], ingresos_por_dia: [] })
 const registros = ref([])
 const totalRegistros = ref(0)
 const pagina = ref(1)
@@ -46,11 +47,95 @@ const tiposCredencial = [
   { title: 'Negocios', value: 5 },
 ]
 
+const datosIngresosDiarios = computed(() => {
+  const registrosDiarios = resumen.value.ingresos_por_dia || []
+  const fechas = [...new Set(registrosDiarios.map(registro => registro.fecha))]
+  const nombresPorTipo = new Map()
+  const ingresosPorFechaYTipo = new Map()
+
+  registrosDiarios.forEach(registro => {
+    const tipo = Number(registro.tipo_credencial_codigo)
+
+    nombresPorTipo.set(tipo, registro.tipo_credencial)
+    ingresosPorFechaYTipo.set(`${registro.fecha}-${tipo}`, Number(registro.ingresos))
+  })
+
+  const series = [...nombresPorTipo.entries()]
+    .sort(([tipoA], [tipoB]) => tipoA - tipoB)
+    .map(([tipo, nombre]) => ({
+      name: nombre,
+      data: fechas.map(fecha => ingresosPorFechaYTipo.get(`${fecha}-${tipo}`) || 0),
+    }))
+
+  return { fechas, series }
+})
+
+const opcionesGraficoIngresos = computed(() => ({
+  chart: {
+    type: 'bar',
+    height: 320,
+    stacked: true,
+    toolbar: { show: false },
+  },
+  plotOptions: {
+    bar: {
+      horizontal: false,
+      columnWidth: '60%',
+      borderRadius: 4,
+    },
+  },
+  colors: [
+    'rgba(var(--v-theme-primary), 1)',
+    'rgba(var(--v-theme-success), 1)',
+    'rgba(var(--v-theme-warning), 1)',
+    'rgba(var(--v-theme-info), 1)',
+    'rgba(var(--v-theme-secondary), 1)',
+  ],
+  dataLabels: { enabled: false },
+  grid: {
+    borderColor: 'rgba(var(--v-border-color), var(--v-border-opacity))',
+    strokeDashArray: 10,
+  },
+  xaxis: {
+    categories: datosIngresosDiarios.value.fechas,
+    labels: {
+      formatter: value => {
+        const [year, month, day] = String(value).split('-')
+
+        return year && month && day ? `${day}/${month}` : value
+      },
+      rotate: -45,
+      hideOverlappingLabels: true,
+      style: {
+        colors: 'rgba(var(--v-theme-on-background), var(--v-disabled-opacity))',
+        fontSize: '12px',
+      },
+    },
+  },
+  yaxis: {
+    min: 0,
+    forceNiceScale: true,
+    title: { text: 'Ingresos' },
+    labels: {
+      formatter: value => Math.round(value),
+      style: {
+        colors: 'rgba(var(--v-theme-on-background), var(--v-disabled-opacity))',
+        fontSize: '12px',
+      },
+    },
+  },
+  tooltip: {
+    shared: true,
+    intersect: false,
+    y: { formatter: value => `${value} ingresos` },
+  },
+  legend: { position: 'bottom' },
+}))
+
 const tablaHeaders = [
   { title: 'Fecha y hora', key: 'fecha_ingreso' },
   { title: 'Persona', key: 'nombre_persona' },
-  { title: 'Credencial', key: 'id_credencial' },
-  { title: 'Evento', key: 'nombre_feria' },
+  { title: 'CI', key: 'ci_persona' },
   { title: 'Operador', key: 'nombre_operador' },
   { title: 'Tipo de credencial', key: 'tipo_credencial' },
   { title: 'Modalidad', key: 'modalidad_credencial' },
@@ -129,7 +214,7 @@ const cargarOperadores = async () => {
 const limpiarReporte = () => {
   solicitudesResumen++
   solicitudesRegistros++
-  resumen.value = { ingresos: 0, personas_unicas: 0, por_credencial: [] }
+  resumen.value = { ingresos: 0, credenciales_unicas: 0, por_credencial: [], ingresos_por_dia: [] }
   registros.value = []
   totalRegistros.value = 0
   cargandoResumen.value = false
@@ -233,13 +318,13 @@ const actualizarFiltros = () => {
 }
 
 watch(() => [filtros.id_usuario_control, filtros.tipo_credencial, filtros.desde, filtros.hasta], actualizarFiltros)
-watch(busqueda, () => {
+watchDebounced(busqueda, () => {
   if (!filtros.id_feria)
     return
 
   pagina.value = 1
   cargarRegistros()
-})
+}, { debounce: 350 })
 
 const formatearFecha = value => {
   if (!value)
@@ -256,21 +341,34 @@ const descargarReporte = async () => {
   exportando.value = true
   error.value = ''
   try {
-    const response = await fetch(`/control-accesos/exportar?${paramsReporte()}`, {
+    const params = paramsReporte()
+    if (busqueda.value.trim())
+      params.set('search', busqueda.value.trim())
+
+    const response = await fetch(`/control-accesos/exportar?${params}`, {
       credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      headers: {
+        Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
     })
 
-    if (!response.ok)
-      throw new Error('No se pudo exportar el reporte.')
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
+    if (!response.ok) {
+      const json = await response.json().catch(() => null)
+      throw new Error(json?.message || 'No se pudo exportar el Excel.')
+    }
+
+    const disposition = response.headers.get('content-disposition') || ''
+    const filename = disposition.match(/filename="?([^"]+)"?/i)?.[1] || 'control_accesos.xlsx'
+    const url = URL.createObjectURL(await response.blob())
     const enlace = document.createElement('a')
 
     enlace.href = url
-    enlace.download = `control-accesos-${new Date().toISOString().slice(0, 10)}.csv`
+    enlace.download = filename
+    document.body.appendChild(enlace)
     enlace.click()
-    URL.revokeObjectURL(url)
+    enlace.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch (exception) {
     error.value = exception.message
   } finally {
@@ -418,7 +516,7 @@ onMounted(async () => {
                 prepend-icon="tabler-download"
                 @click="descargarReporte"
               >
-                Exportar resumen
+                Exportar Excel
               </VBtn>
             </VCol>
           </VRow>
@@ -451,10 +549,10 @@ onMounted(async () => {
           <VCard :loading="cargandoResumen">
             <VCardText>
               <div class="text-body-1 mb-2">
-                Personas únicas
+                Credenciales únicas
               </div>
               <div class="text-h4 font-weight-bold">
-                {{ resumen.personas_unicas.toLocaleString('es-BO') }}
+                {{ resumen.credenciales_unicas.toLocaleString('es-BO') }}
               </div>
               <div class="text-caption">
                 Credenciales distintas con ingreso en el período.
@@ -479,7 +577,7 @@ onMounted(async () => {
                   Ingresos
                 </th>
                 <th class="text-end">
-                  Personas únicas
+                  Credenciales únicas
                 </th>
               </tr>
             </thead>
@@ -494,7 +592,7 @@ onMounted(async () => {
                   {{ fila.ingresos }}
                 </td>
                 <td class="text-end">
-                  {{ fila.personas_unicas }}
+                  {{ fila.credenciales_unicas }}
                 </td>
               </tr>
             </tbody>
@@ -508,12 +606,34 @@ onMounted(async () => {
         </VCardText>
       </VCard>
 
+      <VCard
+        class="mb-6"
+        :loading="cargandoResumen"
+      >
+        <VCardItem title="Ingresos por día y tipo de credencial" />
+        <VDivider />
+        <VCardText>
+          <VueApexCharts
+            v-if="datosIngresosDiarios.series.length"
+            :options="opcionesGraficoIngresos"
+            :series="datosIngresosDiarios.series"
+            height="320"
+          />
+          <div
+            v-else
+            class="text-medium-emphasis"
+          >
+            No hay ingresos para mostrar en el período seleccionado.
+          </div>
+        </VCardText>
+      </VCard>
+
       <VCard v-if="puedeVerRegistros">
         <VCardItem title="Detalle de ingresos">
           <template #append>
             <VTextField
               v-model="busqueda"
-              label="Buscar persona o credencial"
+              label="Buscar persona o CI"
               prepend-inner-icon="tabler-search"
               density="compact"
               hide-details
@@ -527,6 +647,7 @@ onMounted(async () => {
           :items-length="totalRegistros"
           :loading="cargandoRegistros"
           :items-per-page="porPagina"
+          :items-per-page-options="[10, 25, 50, 100]"
           :page="pagina"
           @update:options="actualizarTabla"
         >
@@ -535,6 +656,9 @@ onMounted(async () => {
           </template>
           <template #item.nombre_persona="{ item }">
             {{ item.nombre_persona || '—' }}
+          </template>
+          <template #item.ci_persona="{ item }">
+            {{ item.ci_persona || '—' }}
           </template>
           <template #item.punto_acceso="{ item }">
             {{ item.punto_acceso || '—' }}

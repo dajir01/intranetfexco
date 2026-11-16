@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ControlAccesosExport;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ControlAccesosController extends Controller
 {
@@ -55,11 +58,15 @@ class ControlAccesosController extends Controller
     {
         $filters = $this->validatedFilters($request);
         $query = $this->consultaIngresos($filters);
+        $totales = (clone $query)
+            ->selectRaw('COUNT(*) as ingresos')
+            ->selectRaw('COUNT(DISTINCT id_credencial) as credenciales_unicas')
+            ->first();
 
         $porCredencial = (clone $query)
             ->select('tipo_credencial', 'modalidad_credencial')
             ->selectRaw('COUNT(*) as ingresos')
-            ->selectRaw('COUNT(DISTINCT id_credencial) as personas_unicas')
+            ->selectRaw('COUNT(DISTINCT id_credencial) as credenciales_unicas')
             ->groupBy('tipo_credencial', 'modalidad_credencial')
             ->orderBy('tipo_credencial')
             ->orderBy('modalidad_credencial')
@@ -70,16 +77,27 @@ class ControlAccesosController extends Controller
                 'modalidad_credencial' => $this->modalidadNombre((int) $registro->modalidad_credencial),
                 'modalidad_credencial_codigo' => (int) $registro->modalidad_credencial,
                 'ingresos' => (int) $registro->ingresos,
-                'personas_unicas' => (int) $registro->personas_unicas,
+                'credenciales_unicas' => (int) $registro->credenciales_unicas,
+            ])
+            ->values();
+
+        $ingresosPorDia = $this->consultaIngresosPorDia($query)
+            ->get()
+            ->map(fn (object $registro): array => [
+                'fecha' => $registro->fecha,
+                'tipo_credencial' => $this->tipoCredencialNombre((int) $registro->tipo_credencial),
+                'tipo_credencial_codigo' => (int) $registro->tipo_credencial,
+                'ingresos' => (int) $registro->ingresos,
             ])
             ->values();
 
         return response()->json([
             'success' => true,
             'data' => [
-                'ingresos' => (int) (clone $query)->count(),
-                'personas_unicas' => (int) (clone $query)->distinct('id_credencial')->count('id_credencial'),
+                'ingresos' => (int) $totales->ingresos,
+                'credenciales_unicas' => (int) $totales->credenciales_unicas,
                 'por_credencial' => $porCredencial,
+                'ingresos_por_dia' => $ingresosPorDia,
             ],
         ]);
     }
@@ -95,18 +113,14 @@ class ControlAccesosController extends Controller
         $registros = $this->consultaIngresos($filters)
             ->leftJoin('credenciales as c', 'c.id_credencial', '=', 'credencial_ingresos.id_credencial')
             ->leftJoin('expositores as ex', 'ex.id_exp', '=', 'c.id_expositor')
-            ->leftJoin('eventos as f', 'f.id_feria', '=', 'credencial_ingresos.id_feria')
             ->when($validated['search'] ?? null, function (Builder $query, string $search): void {
                 $query->where(function (Builder $query) use ($search): void {
                     $query->where('ex.nombre', 'like', '%'.$search.'%')
-                        ->orWhere('credencial_ingresos.id_credencial', 'like', '%'.$search.'%')
-                        ->orWhere('f.nombre_feria', 'like', '%'.$search.'%');
+                        ->orWhere('ex.ci', 'like', '%'.$search.'%');
                 });
             })
             ->select(
                 'credencial_ingresos.id',
-                'credencial_ingresos.id_credencial',
-                'credencial_ingresos.id_feria',
                 'credencial_ingresos.fecha_ingreso',
                 'credencial_ingresos.tipo_credencial',
                 'credencial_ingresos.modalidad_credencial',
@@ -116,7 +130,7 @@ class ControlAccesosController extends Controller
                 'usuario_control.nombre as nombre_operador',
                 'usuario_control.usuario as usuario_operador',
                 'ex.nombre as nombre_persona',
-                'f.nombre_feria'
+                'ex.ci as ci_persona'
             )
             ->leftJoin('usuarios_control as usuario_control', 'usuario_control.id_usuario_control', '=', 'credencial_ingresos.id_usuario_control')
             ->orderByDesc('credencial_ingresos.fecha_ingreso')
@@ -125,10 +139,8 @@ class ControlAccesosController extends Controller
 
         $registros->getCollection()->transform(fn (object $registro): array => [
             'id' => (int) $registro->id,
-            'id_credencial' => (int) $registro->id_credencial,
-            'id_feria' => (int) $registro->id_feria,
-            'nombre_feria' => $registro->nombre_feria,
             'nombre_persona' => $registro->nombre_persona,
+            'ci_persona' => $registro->ci_persona,
             'fecha_ingreso' => $registro->fecha_ingreso,
             'tipo_credencial' => $this->tipoCredencialNombre((int) $registro->tipo_credencial),
             'modalidad_credencial' => $this->modalidadNombre((int) $registro->modalidad_credencial),
@@ -142,48 +154,64 @@ class ControlAccesosController extends Controller
         return response()->json(['success' => true, 'data' => $registros]);
     }
 
-    public function exportar(Request $request): StreamedResponse
+    public function exportar(Request $request)
     {
         $filters = $this->validatedFilters($request);
-        $registros = $this->consultaIngresos($filters)
-            ->select('tipo_credencial', 'modalidad_credencial')
-            ->selectRaw('COUNT(*) as ingresos')
-            ->selectRaw('COUNT(DISTINCT id_credencial) as personas_unicas')
-            ->groupBy('tipo_credencial', 'modalidad_credencial')
-            ->orderBy('tipo_credencial')
-            ->orderBy('modalidad_credencial')
-            ->get();
-
-        return response()->streamDownload(function () use ($registros): void {
-            $output = fopen('php://output', 'w');
-            if ($output === false) {
-                throw new \RuntimeException('No se pudo generar el archivo de exportación.');
-            }
-
-            fwrite($output, "\xEF\xBB\xBF");
-            fputcsv($output, ['Tipo de credencial', 'Modalidad', 'Ingresos', 'Personas únicas'], ',', '"', '');
-            foreach ($registros as $registro) {
-                fputcsv($output, [
-                    $this->tipoCredencialNombre((int) $registro->tipo_credencial),
-                    $this->modalidadNombre((int) $registro->modalidad_credencial),
-                    (int) $registro->ingresos,
-                    (int) $registro->personas_unicas,
-                ], ',', '"', '');
-            }
-            fclose($output);
-        }, 'control_accesos_'.now()->format('Ymd_His').'.csv', [
-            'Content-Type' => 'text/csv; charset=UTF-8',
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
         ]);
+        $search = trim($validated['search'] ?? '');
+
+        $query = $this->consultaIngresos($filters)
+            ->leftJoin('credenciales as c', 'c.id_credencial', '=', 'credencial_ingresos.id_credencial')
+            ->leftJoin('expositores as ex', 'ex.id_exp', '=', 'c.id_expositor')
+            ->leftJoin('empresas as emp', 'emp.id_empresa', '=', 'c.id_empresa')
+            ->when($search !== '', function (Builder $query) use ($search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('ex.nombre', 'like', '%'.$search.'%')
+                        ->orWhere('ex.ci', 'like', '%'.$search.'%');
+                });
+            });
+
+        $resumen = $this->consultaIngresosPorDia($query)
+            ->get()
+            ->map(fn (object $registro): array => [
+                $this->tipoCredencialNombre((int) $registro->tipo_credencial),
+                (string) $registro->fecha,
+                (int) $registro->ingresos,
+            ])
+            ->values();
+
+        $detalle = (clone $query)
+            ->select(
+                'credencial_ingresos.id',
+                'credencial_ingresos.fecha_ingreso',
+                'credencial_ingresos.numero_puerta',
+                'credencial_ingresos.punto_acceso',
+                'ex.nombre as nombre_completo',
+                'ex.ci',
+                'emp.nombre_empresa'
+            )
+            ->orderBy('credencial_ingresos.fecha_ingreso')
+            ->orderBy('credencial_ingresos.id');
+
+        $nombreEvento = (string) DB::table('eventos')
+            ->where('id_feria', $filters['id_feria'])
+            ->value('nombre_feria');
+        $nombreArchivo = 'ControlAccesos_'.(Str::slug($nombreEvento, '_') ?: 'evento_'.$filters['id_feria'])
+            .'_'.now()->format('Ymd_His').'.xlsx';
+
+        return Excel::download(new ControlAccesosExport($resumen, $detalle), $nombreArchivo);
     }
 
     private function validatedFilters(Request $request): array
     {
         return $request->validate([
-            'id_feria' => ['nullable', 'integer', 'exists:eventos,id_feria'],
+            'id_feria' => ['required', 'integer', 'exists:eventos,id_feria'],
             'id_usuario_control' => ['nullable', 'integer', 'exists:usuarios_control,id_usuario_control'],
             'tipo_credencial' => ['nullable', 'integer', 'in:1,2,3,4,5'],
-            'desde' => ['nullable', 'date'],
-            'hasta' => ['nullable', 'date', 'after_or_equal:desde'],
+            'desde' => ['nullable', 'date_format:Y-m-d'],
+            'hasta' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:desde'],
         ]);
     }
 
@@ -193,8 +221,27 @@ class ControlAccesosController extends Controller
             ->when($filters['id_feria'] ?? null, fn (Builder $query, int $idFeria) => $query->where('credencial_ingresos.id_feria', $idFeria))
             ->when($filters['id_usuario_control'] ?? null, fn (Builder $query, int $idUsuarioControl) => $query->where('credencial_ingresos.id_usuario_control', $idUsuarioControl))
             ->when($filters['tipo_credencial'] ?? null, fn (Builder $query, int $tipo) => $query->where('credencial_ingresos.tipo_credencial', $tipo))
-            ->when($filters['desde'] ?? null, fn (Builder $query, string $fecha) => $query->whereDate('credencial_ingresos.fecha_ingreso', '>=', $fecha))
-            ->when($filters['hasta'] ?? null, fn (Builder $query, string $fecha) => $query->whereDate('credencial_ingresos.fecha_ingreso', '<=', $fecha));
+            ->when($filters['desde'] ?? null, fn (Builder $query, string $fecha) => $query->where(
+                'credencial_ingresos.fecha_ingreso',
+                '>=',
+                CarbonImmutable::createFromFormat('!Y-m-d', $fecha)->toDateTimeString()
+            ))
+            ->when($filters['hasta'] ?? null, fn (Builder $query, string $fecha) => $query->where(
+                'credencial_ingresos.fecha_ingreso',
+                '<',
+                CarbonImmutable::createFromFormat('!Y-m-d', $fecha)->addDay()->toDateTimeString()
+            ));
+    }
+
+    private function consultaIngresosPorDia(Builder $query): Builder
+    {
+        return (clone $query)
+            ->selectRaw('DATE(credencial_ingresos.fecha_ingreso) as fecha')
+            ->addSelect('credencial_ingresos.tipo_credencial')
+            ->selectRaw('COUNT(*) as ingresos')
+            ->groupByRaw('DATE(credencial_ingresos.fecha_ingreso), credencial_ingresos.tipo_credencial')
+            ->orderBy('fecha')
+            ->orderBy('credencial_ingresos.tipo_credencial');
     }
 
     private function tipoCredencialNombre(int $tipo): string
