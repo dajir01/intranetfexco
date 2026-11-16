@@ -30,7 +30,7 @@ class EmpresaController extends Controller
             $sortDir  = $request->get('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
             $estado   = $request->get('estado'); // null | '1' | '0'
 
-            $allowed = ['nombre_empresa', 'nit', 'nombre_gerente', 'email', 'telefono', 'id_empresa'];
+            $allowed = ['nombre_empresa', 'nit', 'nombre_gerente', 'email', 'telefono', 'id_empresa', 'fecha_creacion'];
             if (! in_array($sortKey, $allowed, true)) {
                 $sortKey = 'nombre_empresa';
             }
@@ -46,8 +46,8 @@ class EmpresaController extends Controller
                     'ciudad',
                     'pais',
                     'es_activo',
-                    'created_at',
-                    'updated_at',
+                    'fecha_creacion',
+                    'fecha_actualizacion_empresa',
                     'id_usuario_creacion',
                     'id_usuario_actualizacion',
                 ]);

@@ -28,7 +28,7 @@ const headers = [
   { title: 'NIT',             key: 'nit',             sortable: true  },
   { title: 'Representante',   key: 'nombre_gerente',  sortable: true  },
   { title: 'Teléfono',        key: 'telefono',        sortable: false },
-  { title: 'Registro',        key: 'created_at',      sortable: true  },
+  { title: 'Registro',        key: 'fecha_creacion',  sortable: true  },
   { title: 'Acciones',        key: 'actions',         sortable: false },
 ]
 
@@ -179,18 +179,18 @@ const verDetalle = (empresa) => {
         </template>
 
         <!-- Fecha -->
-        <template #item.created_at="{ item }">
+        <template #item.fecha_creacion="{ item }">
           <div class="text-caption">
             <span class="text-medium-emphasis">Creado por:</span>
             {{ item.usuario_creacion_nombre || '—' }}
             <br>
-            <span class="text-disabled">{{ formatDate(item.created_at) }}</span>
+            <span class="text-disabled">{{ formatDate(item.fecha_creacion) }}</span>
           </div>
-          <div v-if="item.updated_at" class="text-caption mt-1">
+          <div v-if="item.fecha_actualizacion_empresa" class="text-caption mt-1">
             <span class="text-medium-emphasis">Actualizado por:</span>
             {{ item.usuario_actualizacion_nombre || '—' }}
             <br>
-            <span class="text-disabled">{{ formatDate(item.updated_at) }}</span>
+            <span class="text-disabled">{{ formatDate(item.fecha_actualizacion_empresa) }}</span>
           </div>
         </template>
 
