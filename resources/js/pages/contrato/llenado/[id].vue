@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { useContratoAccess } from '@/composables/useContratoAccess'
+import { useEmpresaNitSearch } from '@/composables/useEmpresaNitSearch'
 import { useContratoValidation } from '@/composables/useContratoValidation'
 import { openPdfWithError } from '@/utils/openPdfWithError'
 
@@ -244,6 +245,140 @@ const nitNumerico = computed({
   },
 })
 
+const empresaCoincidente = ref(null)
+const dialogoEmpresaCoincidente = ref(false)
+const idEmpresaDestino = ref(null)
+const nitInicialBloqueado = ref(false)
+const nitBloqueado = computed(() => idEmpresaDestino.value !== null || nitInicialBloqueado.value)
+const nitPresente = computed(() => Boolean(normalizarNit(formulario.value.nit)))
+
+const {
+  buscandoNit,
+  estadoBusquedaNit,
+  programarBusquedaEmpresa: programarBusquedaNit,
+  cancelarBusquedaEmpresa,
+} = useEmpresaNitSearch({
+  endpoint: () => `/contratos/${contratoId.value}/empresa-nit`,
+  normalizeNit: normalizarNit,
+  onMatch: coincidencia => {
+    empresaCoincidente.value = coincidencia
+    dialogoEmpresaCoincidente.value = true
+  },
+  onReview: () => mostrarNotificacion(
+    'Se encontraron empresas con este NIT, pero no se pudo determinar una ficha principal. Solicite revisión.',
+    'error',
+  ),
+  onError: error => {
+    const errores = formatearErroresServidor(error.response?.data?.errors)
+
+    mostrarNotificacion(
+      errores.join(' | ') || error.response?.data?.message || error.message || 'No se pudo buscar el NIT.',
+      'error',
+    )
+  },
+})
+
+const programarBusquedaEmpresa = valor => {
+  if (nitBloqueado.value) {
+    cancelarBusquedaEmpresa()
+
+    return
+  }
+
+  programarBusquedaNit(valor)
+}
+
+const aceptarEmpresaCoincidente = async () => {
+  const coincidencia = empresaCoincidente.value?.empresa
+  if (!coincidencia) {
+    return
+  }
+
+  cancelarBusquedaEmpresa()
+  formulario.value.nombre_empresa = coincidencia.nombre_empresa || ''
+  formulario.value.nit = normalizarNit(coincidencia.nit)
+  formulario.value.direccion = coincidencia.direccion || ''
+  formulario.value.telefono = coincidencia.telefono || ''
+  formulario.value.fax = coincidencia.fax || ''
+  formulario.value.email = coincidencia.email || ''
+  formulario.value.web = coincidencia.web || ''
+  formulario.value.pais_id = coincidencia.pais || null
+  formulario.value.ciudad_id = coincidencia.ciudad || null
+  formulario.value.nombre_contacto = coincidencia.nombre_responsable || ''
+  formulario.value.telefono_contacto = coincidencia.telefono_responsable || ''
+  formulario.value.email_contacto = coincidencia.email_representante || ''
+  formulario.value.nombre_gerente = coincidencia.nombre_gerente || ''
+  formulario.value.ci_gerente = coincidencia.ci_gerente || ''
+  formulario.value.exp_ci_gerente = coincidencia.exp_ci_gerente || ''
+  formulario.value.fono_gerente = coincidencia.fono_gerente || ''
+  formulario.value.cargo_gerente = coincidencia.cargo_gerente || ''
+  formulario.value.id_rubro = coincidencia.rubro ? String(coincidencia.rubro) : 'No Asignado'
+  formulario.value.id_subrubro = coincidencia.subrubro ? String(coincidencia.subrubro) : 'No Asignado'
+  formulario.value.otro_rubro = coincidencia.otro_rubro || ''
+  formulario.value.categoria = coincidencia.cluster ? String(coincidencia.cluster) : ''
+  formulario.value.aniversario = coincidencia.aniversario || ''
+  formulario.value.nr_escritura = coincidencia.nr_escritura || ''
+  formulario.value.fecha_nr_escritura = coincidencia.fecha_nr_escritura || ''
+  formulario.value.matricula = coincidencia.matricula || ''
+  formulario.value.nr_poder = coincidencia.nr_poder || ''
+  formulario.value.nr_notaria = coincidencia.nr_notaria || ''
+  formulario.value.fecha_nr_poder = coincidencia.fecha_nr_poder || ''
+  formulario.value.distrito = coincidencia.distrito || ''
+  formulario.value.actividad_principal = coincidencia.id_tipo_representante
+    ? String(coincidencia.id_tipo_representante).split('00')[0]
+    : '0'
+  idEmpresaDestino.value = Number(coincidencia.id_empresa)
+  estadoBusquedaNit.value = 'Empresa seleccionada.'
+  dialogoEmpresaCoincidente.value = false
+  await cargarNombresPaisYCiudad()
+}
+
+const rechazarEmpresaCoincidente = () => {
+  cancelarBusquedaEmpresa()
+  dialogoEmpresaCoincidente.value = false
+  empresaCoincidente.value = null
+  formulario.value.nit = ''
+  idEmpresaDestino.value = null
+}
+
+const cambiarEmpresa = () => {
+  cancelarBusquedaEmpresa()
+  idEmpresaDestino.value = null
+  formulario.value.nit = ''
+  formulario.value.nombre_empresa = ''
+  formulario.value.direccion = ''
+  formulario.value.telefono = ''
+  formulario.value.fax = ''
+  formulario.value.email = ''
+  formulario.value.web = ''
+  formulario.value.pais_id = null
+  formulario.value.ciudad_id = null
+  formulario.value.nombre_contacto = ''
+  formulario.value.telefono_contacto = ''
+  formulario.value.email_contacto = ''
+  formulario.value.nombre_gerente = ''
+  formulario.value.ci_gerente = ''
+  formulario.value.exp_ci_gerente = ''
+  formulario.value.fono_gerente = ''
+  formulario.value.cargo_gerente = ''
+  formulario.value.id_rubro = 'No Asignado'
+  formulario.value.id_subrubro = 'No Asignado'
+  formulario.value.otro_rubro = ''
+  formulario.value.categoria = ''
+  formulario.value.aniversario = ''
+  formulario.value.nr_escritura = ''
+  formulario.value.fecha_nr_escritura = ''
+  formulario.value.matricula = ''
+  formulario.value.nr_poder = ''
+  formulario.value.nr_notaria = ''
+  formulario.value.fecha_nr_poder = ''
+  formulario.value.distrito = ''
+  formulario.value.actividad_principal = '0'
+  paisSeleccionado.value = null
+  ciudadSeleccionada.value = null
+  ciudadesList.value = []
+}
+
 // ==================== CATÁLOGOS ====================
 const catalogos = ref({
   paises: [],
@@ -377,6 +512,7 @@ const cargarDatos = async () => {
     if (responseContrato.data.success) {
       contrato.value = responseContrato.data.data
       empresa.value = contrato.value.empresa
+      nitInicialBloqueado.value = Boolean(normalizarNit(empresa.value?.nit))
 
       const precioUnitarioGuardado = redondearDosDecimales(contrato.value.precio_unit)
       const precioTotalGuardado = redondearDosDecimales(contrato.value.precio_total)
@@ -967,6 +1103,7 @@ const guardarContrato = async () => {
       como_entero: formulario.value.como_entero || '0',
       tipo_expositor: formulario.value.tipo_expositor || '0',
       tipo_credenciales: requiereTipoCredencial.value ? formulario.value.tipo_credenciales : '0',
+      id_empresa_destino: idEmpresaDestino.value,
 
       // Marcas - Formato compatible con sistema antiguo
       // Guarda: "Marca1;Marca2;Marca3"
@@ -1046,6 +1183,7 @@ const guardarContrato = async () => {
       // Actualizar estado del contrato
       contrato.value = response.data.data.contrato
       empresa.value = response.data.data.empresa
+      nitInicialBloqueado.value = Boolean(normalizarNit(empresa.value?.nit))
       contratoGuardado.value = true
       mostrarNotificacion('Contrato guardado exitosamente', 'success')
     } else {
@@ -1234,6 +1372,15 @@ onMounted(() => {
             <!-- FORMULARIO (CONDICIONALMENTE VISIBLE) -->
             <!-- ============================================ -->
             <VForm v-if="mostrarFormulario" ref="formularioRef" v-model="isValid" lazy-validation>
+              <VAlert
+                v-if="!nitPresente"
+                type="info"
+                variant="tonal"
+                class="mb-4"
+              >
+                Ingrese el NIT para habilitar los demás campos de la empresa, contacto y evento.
+              </VAlert>
+
               <!-- ========== SECCIÓN 1: DATOS DE LA EMPRESA ========== -->
               <VCard variant="outlined" class="mb-6">
                 <VCardText>
@@ -1242,6 +1389,39 @@ onMounted(() => {
                   </div>
                   <VRow>
                     <VCol cols="12" md="3">
+                      <VTextField
+                        v-model="nitNumerico"
+                        label="NIT *"
+                        inputmode="numeric"
+                        variant="outlined"
+                        dense
+                        :disabled="nitBloqueado"
+                        :loading="buscandoNit"
+                        :hint="estadoBusquedaNit"
+                        persistent-hint
+                        @keydown="bloquearCaracterNoNumerico"
+                        @paste="bloquearPegadoNoNumerico"
+                        @beforeinput="bloquearEntradaNoNumerica"
+                        @update:model-value="programarBusquedaEmpresa"
+                        :rules="[nitRule]"
+                      />
+                      <VBtn
+                        v-if="idEmpresaDestino !== null"
+                        class="mt-1"
+                        size="small"
+                        variant="text"
+                        @click="cambiarEmpresa"
+                      >
+                        Cambiar empresa
+                      </VBtn>
+                    </VCol>
+                    <fieldset
+                      class="nit-gated-fields"
+                      :disabled="!nitPresente"
+                      :inert="!nitPresente"
+                      style="display: contents;"
+                    >
+                    <VCol cols="12" md="4">
                       <VTextField
                         v-model="formulario.nombre_empresa"
                         label="Nombre de la Empresa *"
@@ -1257,19 +1437,6 @@ onMounted(() => {
                         variant="outlined"
                         dense
                         :rules="[requiredRule]"
-                      />
-                    </VCol>
-                    <VCol cols="12" md="3">
-                      <VTextField
-                        v-model="nitNumerico"
-                        label="NIT *"
-                        inputmode="numeric"
-                        variant="outlined"
-                        dense
-                        @keydown="bloquearCaracterNoNumerico"
-                        @paste="bloquearPegadoNoNumerico"
-                        @beforeinput="bloquearEntradaNoNumerica"
-                        :rules="[nitRule]"
                       />
                     </VCol>
                     <VCol cols="12" md="3">
@@ -1486,6 +1653,7 @@ onMounted(() => {
                         :rules="[requiredRule]"
                       />
                     </VCol>
+                    </fieldset>
                   </VRow>
                 </VCardText>
               </VCard>
@@ -1496,7 +1664,13 @@ onMounted(() => {
                   <div class="text-h6 mb-4 font-weight-bold">
                     2. Datos Responsable / Contacto
                   </div>
-                  <VRow>
+                  <fieldset
+                    class="nit-gated-fields"
+                    :disabled="!nitPresente"
+                    :inert="!nitPresente"
+                    style="display: contents;"
+                  >
+                    <VRow>
                     <VCol cols="12" md="3">
                       <VTextField
                         v-model="formulario.nombre_gerente"
@@ -1585,7 +1759,8 @@ onMounted(() => {
                         :rules="[emailOptionalRule]"
                       />
                     </VCol>
-                  </VRow>
+                    </VRow>
+                  </fieldset>
                 </VCardText>
               </VCard>
 
@@ -1595,7 +1770,13 @@ onMounted(() => {
                   <div class="text-h6 mb-4 font-weight-bold">
                     3. Datos - Evento
                   </div>
-                  <VRow>
+                  <fieldset
+                    class="nit-gated-fields"
+                    :disabled="!nitPresente"
+                    :inert="!nitPresente"
+                    style="display: contents;"
+                  >
+                    <VRow>
                     <VCol cols="12" md="3">
                       <VSelect
                         v-model="formulario.medio_comunicacion"
@@ -1781,7 +1962,8 @@ onMounted(() => {
                         rows="5"
                       />
                     </VCol>
-                  </VRow>
+                    </VRow>
+                  </fieldset>
                 </VCardText>
               </VCard>
 
@@ -2083,6 +2265,7 @@ onMounted(() => {
                     color="success"
                     block
                     prepend-icon="tabler-check"
+                    :disabled="!nitPresente"
                   >
                     Guardar Contrato
                   </VBtn>
@@ -2125,6 +2308,39 @@ onMounted(() => {
         </VCardText>
       </VCard>
     </VCol>
+
+    <VDialog
+      v-model="dialogoEmpresaCoincidente"
+      max-width="640"
+      persistent
+    >
+      <VCard v-if="empresaCoincidente">
+        <VCardTitle>Empresa encontrada para este NIT</VCardTitle>
+        <VCardText>
+          <p class="mb-2">
+            Se encontró <strong>{{ empresaCoincidente.empresa?.nombre_empresa }}</strong>
+            (NIT {{ empresaCoincidente.empresa?.nit }}).
+          </p>
+          <p class="mt-4 mb-0">
+            ¿Desea utilizar estos datos? El NIT quedará bloqueado; los demás campos seguirán editables.
+          </p>
+        </VCardText>
+        <VCardActions class="justify-end">
+          <VBtn
+            variant="text"
+            @click="rechazarEmpresaCoincidente"
+          >
+            No, ingresar otro NIT
+          </VBtn>
+          <VBtn
+            color="primary"
+            @click="aceptarEmpresaCoincidente"
+          >
+            Sí, utilizar esta empresa
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
 
     <!-- ========== MODAL LINK LLENADO PÚBLICO ========== -->
     <VDialog
@@ -2291,3 +2507,10 @@ onMounted(() => {
     </VSnackbar>
   </VRow>
 </template>
+
+<style>
+.nit-gated-fields:disabled .v-field,
+.nit-gated-fields:disabled .v-btn {
+  opacity: 0.55;
+}
+</style>

@@ -142,6 +142,9 @@ Route::post('/api/autoacreditacion/registrar', [CredencialPinController::class, 
 // Rutas públicas de Contratos (acceso sin autenticación para formularios públicos)
 Route::get('/api/formulario/contrato/{id_contrato}/{clave}', [ContratoController::class, 'getContratoPublico'])
     ->whereNumber('id_contrato');
+Route::get('/api/formulario/contrato/{id_contrato}/{clave}/empresa-nit', [ContratoController::class, 'buscarEmpresaPublicaPorNit'])
+    ->whereNumber('id_contrato')
+    ->middleware('throttle:30,1');
 Route::post('/api/formulario/guardar/{id_contrato}/{clave}', [ContratoController::class, 'guardarFormularioPublico'])
     ->whereNumber('id_contrato');
 
@@ -362,6 +365,9 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('ability:contratos.edit')->group(function () {
+        Route::get('/contratos/{id}/empresa-nit', [ContratoController::class, 'buscarEmpresaPorNit'])
+            ->whereNumber('id')
+            ->middleware('throttle:60,1');
         Route::get('/contratos/{id}/cambiar-datos', [ContratoController::class, 'getDatosCambio'])->whereNumber('id');
         Route::put('/contratos/{id}/llenar', [ContratoController::class, 'guardarLlenado'])->whereNumber('id');
         Route::patch('/contratos/{id}/empresa', [ContratoController::class, 'actualizarEmpresa'])->whereNumber('id');

@@ -14,7 +14,9 @@ use App\Models\Feria;
 use App\Models\Pabellon;
 use App\Models\Stand;
 use App\Services\CredentialPhotoStorage;
+use App\Services\EmpresaNitResolver;
 use App\Support\CredentialModality;
+use App\Support\NitNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -3150,13 +3152,24 @@ class CredencialController extends Controller
         }
     }
 
-    public function storeEmpresa(Request $request): JsonResponse
+    public function storeEmpresa(Request $request, EmpresaNitResolver $resolver): JsonResponse
     {
         $validated = $request->validate([
             'id_feria' => ['required', 'integer', 'exists:eventos,id_feria'],
             'id_empresa' => ['nullable', 'integer', 'exists:empresas,id_empresa'],
             'nombre_empresa' => ['required', 'string', 'max:255'],
-            'nit' => ['nullable', 'string', 'max:50'],
+            'nit' => [
+                'nullable',
+                'string',
+                'min:5',
+                'max:50',
+                'regex:/^[0-9\s.\/-]+$/',
+                function ($attribute, $value, $fail): void {
+                    if (strlen(NitNormalizer::normalize((string) $value)) < 5) {
+                        $fail('El NIT debe contener al menos 5 dígitos.');
+                    }
+                },
+            ],
             'usuario' => ['nullable', 'string', 'max:50'],
             'pass' => ['nullable', 'string', 'max:255'],
             'tipo_credencial' => ['required', 'string', 'max:100'],
@@ -3164,61 +3177,66 @@ class CredencialController extends Controller
             'cantidad_credenciales' => ['required', 'integer', 'min:1'],
         ]);
 
-        $result = DB::transaction(function () use ($validated): array {
-            $feria = Feria::query()->lockForUpdate()->findOrFail($validated['id_feria']);
-            $tipos = collect(explode(';', (string) $feria->tipo_credenciales))
-                ->map(fn ($tipo) => trim($tipo))
-                ->filter();
+        $result = $resolver->withNitLock(
+            (string) ($validated['nit'] ?? ''),
+            fn () => DB::transaction(function () use ($validated, $resolver): array {
+                $feria = Feria::query()->lockForUpdate()->findOrFail($validated['id_feria']);
+                $tipos = collect(explode(';', (string) $feria->tipo_credenciales))
+                    ->map(fn ($tipo) => trim($tipo))
+                    ->filter();
 
-            if (! $tipos->contains($validated['tipo_credencial'])) {
-                throw ValidationException::withMessages([
-                    'tipo_credencial' => 'El tipo de credencial no está habilitado para este evento.',
-                ]);
-            }
-
-            if (! empty($validated['id_empresa'])) {
-                $empresa = Empresa::query()->lockForUpdate()->findOrFail($validated['id_empresa']);
-            } else {
-                $empresa = Empresa::query()
-                    ->whereRaw('LOWER(nombre_empresa) = ?', [mb_strtolower(trim($validated['nombre_empresa']))])
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($empresa) {
+                if (! $tipos->contains($validated['tipo_credencial'])) {
                     throw ValidationException::withMessages([
-                        'nombre_empresa' => 'Ya existe una empresa con ese nombre. Selecciónela de la lista.',
+                        'tipo_credencial' => 'El tipo de credencial no está habilitado para este evento.',
                     ]);
                 }
 
-                $nit = trim((string) ($validated['nit'] ?? ''));
-                if ($nit !== '' && Empresa::query()->where('nit', $nit)->exists()) {
-                    throw ValidationException::withMessages(['nit' => 'El NIT ya está registrado en otra empresa.']);
+                if (! empty($validated['id_empresa'])) {
+                    $empresa = Empresa::query()->lockForUpdate()->findOrFail($validated['id_empresa']);
+                } else {
+                    $empresa = Empresa::query()
+                        ->whereRaw('LOWER(nombre_empresa) = ?', [mb_strtolower(trim($validated['nombre_empresa']))])
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($empresa) {
+                        throw ValidationException::withMessages([
+                            'nombre_empresa' => 'Ya existe una empresa con ese nombre. Selecciónela de la lista.',
+                        ]);
+                    }
+
+                    $nit = NitNormalizer::normalize((string) ($validated['nit'] ?? ''));
+                    if ($nit !== '') {
+                        if ($resolver->existsByNit($nit)) {
+                            throw ValidationException::withMessages(['nit' => 'El NIT ya está registrado en otra empresa.']);
+                        }
+                    }
+
+                    $empresa = $this->crearEmpresaDesdeCredenciales($validated, Auth::user()?->id_usuario);
                 }
 
-                $empresa = $this->crearEmpresaDesdeCredenciales($validated, Auth::user()?->id_usuario);
-            }
+                if (EmpresaEventoCredencial::query()
+                    ->where('id_empresa', $empresa->id_empresa)
+                    ->where('id_feria', $feria->id_feria)
+                    ->where('tipo_credencial', $validated['tipo_credencial'])
+                    ->exists()) {
+                    throw ValidationException::withMessages(['empresa' => 'La empresa ya está vinculada a este tipo de credencial en el evento.']);
+                }
 
-            if (EmpresaEventoCredencial::query()
-                ->where('id_empresa', $empresa->id_empresa)
-                ->where('id_feria', $feria->id_feria)
-                ->where('tipo_credencial', $validated['tipo_credencial'])
-                ->exists()) {
-                throw ValidationException::withMessages(['empresa' => 'La empresa ya está vinculada a este tipo de credencial en el evento.']);
-            }
+                $vinculacion = EmpresaEventoCredencial::query()->create([
+                    'id_empresa' => $empresa->id_empresa,
+                    'id_feria' => $feria->id_feria,
+                    'tipo_credencial' => $validated['tipo_credencial'],
+                    'tipo_credenciales' => CredentialModality::normalize((int) $feria->id_feria, (int) $validated['tipo_credenciales']),
+                    'cantidad_credenciales' => $validated['cantidad_credenciales'],
+                    'id_contrato' => null,
+                    'visible_en_plataforma' => false,
+                    'id_usuario_creacion' => Auth::user()?->id_usuario,
+                ]);
 
-            $vinculacion = EmpresaEventoCredencial::query()->create([
-                'id_empresa' => $empresa->id_empresa,
-                'id_feria' => $feria->id_feria,
-                'tipo_credencial' => $validated['tipo_credencial'],
-                'tipo_credenciales' => CredentialModality::normalize((int) $feria->id_feria, (int) $validated['tipo_credenciales']),
-                'cantidad_credenciales' => $validated['cantidad_credenciales'],
-                'id_contrato' => null,
-                'visible_en_plataforma' => false,
-                'id_usuario_creacion' => Auth::user()?->id_usuario,
-            ]);
-
-            return ['empresa' => $empresa, 'vinculacion' => $vinculacion];
-        });
+                return ['empresa' => $empresa, 'vinculacion' => $vinculacion];
+            })
+        );
 
         return response()->json([
             'success' => true,

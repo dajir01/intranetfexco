@@ -33,6 +33,10 @@ export function useContratoValidation() {
       return 'El NIT debe contener solo números'
     }
 
+    if (String(v).length < 5) {
+      return 'El NIT debe contener al menos 5 dígitos'
+    }
+
     return true
   }
 

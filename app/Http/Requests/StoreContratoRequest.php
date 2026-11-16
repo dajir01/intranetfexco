@@ -47,7 +47,8 @@ class StoreContratoRequest extends FormRequest
             // ========== SECCIÓN 1: DATOS DE LA EMPRESA ==========
             'nombre_empresa' => 'required|string|max:255',
             'direccion' => 'required|string|max:500',
-            'nit' => ['required', 'string', 'max:50', 'regex:/^[0-9]+$/'],
+            'nit' => ['required', 'string', 'min:5', 'max:50', 'regex:/^[0-9]+$/'],
+            'id_empresa_destino' => 'nullable|integer|exists:empresas,id_empresa',
             'telefono' => 'required|string|min:7|max:50',
             'email' => 'nullable|email|max:255',
             'pais_id' => 'required|integer|exists:paises,id',
@@ -145,6 +146,7 @@ class StoreContratoRequest extends FormRequest
             'nombre_empresa.required' => 'El nombre de la empresa es obligatorio.',
             'direccion.required' => 'La dirección es obligatoria.',
             'nit.required' => 'El NIT es obligatorio.',
+            'nit.min' => 'El NIT debe contener al menos 5 dígitos.',
             'nit.regex' => 'El NIT debe contener solo números.',
             'telefono.required' => 'El teléfono es obligatorio.',
             'telefono.min' => 'El teléfono debe tener al menos 7 dígitos.',

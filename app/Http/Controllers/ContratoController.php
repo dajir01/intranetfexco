@@ -12,6 +12,8 @@ use App\Models\Stand;
 use App\Models\Backedempresa;
 use App\Http\Requests\StoreContratoRequest;
 use App\Events\ContratoActualizado;
+use App\Services\EmpresaNitResolver;
+use App\Support\NitNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -135,11 +137,68 @@ class ContratoController extends Controller
         }
     }
 
+    public function buscarEmpresaPublicaPorNit($idContrato, $clave, Request $request, EmpresaNitResolver $resolver)
+    {
+        $validated = $request->validate([
+            'nit' => ['required', 'string', 'min:5', 'max:50', 'regex:/^[0-9]+$/'],
+        ]);
+        $contrato = Contrato::query()
+            ->where('id_contrato', $idContrato)
+            ->where('clave', $clave)
+            ->first();
+
+        if (! $contrato) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contrato no encontrado o clave incorrecta.',
+            ], 404);
+        }
+
+        if ((int) $contrato->codigo_contrato > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Este contrato ya fue generado y no puede modificarse.',
+            ], 403);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $resolver->lookup($validated['nit']),
+        ]);
+    }
+
+    public function buscarEmpresaPorNit($id, Request $request, EmpresaNitResolver $resolver)
+    {
+        $validated = $request->validate([
+            'nit' => ['required', 'string', 'min:5', 'max:50', 'regex:/^[0-9]+$/'],
+        ]);
+        $contrato = Contrato::query()->find($id);
+        if (! $contrato) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Contrato no encontrado.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $resolver->lookup($validated['nit']),
+        ]);
+    }
+
     /**
      * Guardar formulario público - Réplica de formulario_lleno
      * Guarda datos de contratos y empresas desde el formulario público
      */
-    public function guardarFormularioPublico($idContrato, $clave, StoreContratoRequest $request)
+    public function guardarFormularioPublico($idContrato, $clave, StoreContratoRequest $request, EmpresaNitResolver $resolver)
+    {
+        return $resolver->withNitLock(
+            (string) $request->input('nit', ''),
+            fn () => $this->guardarFormularioPublicoConNit($idContrato, $clave, $request, $resolver)
+        );
+    }
+
+    private function guardarFormularioPublicoConNit($idContrato, $clave, StoreContratoRequest $request, EmpresaNitResolver $resolver)
     {
         try {
             // ==================== VALIDACIÓN ====================
@@ -147,12 +206,18 @@ class ContratoController extends Controller
             // Si hay errores de validación, Laravel retorna automáticamente un 422
             // con los errores estructurados
             
-            // Validar contrato y clave
-            $contrato = Contrato::where('id_contrato', $idContrato)
+            DB::beginTransaction();
+
+            // Bloquear el contrato antes de comprobar su estado y cambiar la empresa asociada.
+            $contrato = Contrato::query()
+                ->where('id_contrato', $idContrato)
                 ->where('clave', $clave)
+                ->lockForUpdate()
                 ->first();
 
             if (!$contrato) {
+                DB::rollBack();
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Contrato no encontrado o clave incorrecta'
@@ -161,20 +226,16 @@ class ContratoController extends Controller
 
             // Verificar que el contrato no tenga código generado
             if (!empty($contrato->codigo_contrato)) {
+                DB::rollBack();
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Este contrato ya fue generado y no puede ser modificado. Por favor contacte al área comercial de FEXCO.'
                 ], 403);
             }
 
-            // Obtener empresa
-            $empresa = Empresa::find($contrato->id_empresa);
-            if (!$empresa) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Empresa no encontrada'
-                ], 404);
-            }
+            $resolucionEmpresa = $resolver->resolveForContract($contrato, $request);
+            $empresa = $resolucionEmpresa['empresa'];
 
             // Guardar datos antes de cambios (para auditoría)
             $datosAntes = $empresa->toArray();
@@ -326,6 +387,9 @@ class ContratoController extends Controller
                 $auditoria->save();
             }
 
+            $resolver->deleteProvisionalIfOrphaned($resolucionEmpresa['empresa_anterior_id']);
+            DB::commit();
+
             event(new \App\Events\ActualizacionDatos([
                 'empresa' => $empresa->nombre_empresa ?? 'Empresa',
                 'feria' => optional($contrato->feria)->nombre_feria ?? 'Feria',
@@ -345,7 +409,21 @@ class ContratoController extends Controller
                 ]
             ]);
 
+        } catch (ValidationException $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Revise los campos indicados.',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+
             Log::error('Error al guardar formulario público de contrato', [
                 'id_contrato' => $idContrato,
                 'exception' => $e->getMessage(),
@@ -521,7 +599,7 @@ class ContratoController extends Controller
     /**
      * Crear una nueva empresa
      */
-    public function storeEmpresa(Request $request)
+    public function storeEmpresa(Request $request, EmpresaNitResolver $resolver)
     {
         try {
             $validated = $request->validate([
@@ -531,33 +609,56 @@ class ContratoController extends Controller
                 'telefono' => 'nullable|string|max:50',
                 'email' => 'nullable|email|max:255',
                 'direccion' => 'nullable|string|max:500',
-                'nit' => 'nullable|string|max:50',
+                'nit' => [
+                    'nullable',
+                    'string',
+                    'min:5',
+                    'max:50',
+                    'regex:/^[0-9\s.\/-]+$/',
+                    function ($attribute, $value, $fail): void {
+                        if (strlen(NitNormalizer::normalize((string) $value)) < 5) {
+                            $fail('El NIT debe contener al menos 5 dígitos.');
+                        }
+                    },
+                ],
                 'pais' => 'nullable|string|max:100',
                 'ciudad' => 'nullable|string|max:100',
             ]);
 
-            // Verificar si ya existe una empresa con el mismo nombre
-            $empresaExistente = Empresa::where('nombre_empresa', $validated['nombre_empresa'])->first();
-            
-            if ($empresaExistente) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Ya existe una empresa con ese nombre'
-                ], 422);
-            }
+            $empresa = $resolver->withNitLock(
+                (string) ($validated['nit'] ?? ''),
+                fn () => DB::transaction(function () use ($validated, $resolver) {
+                    $nit = NitNormalizer::normalize((string) ($validated['nit'] ?? ''));
+                    if ($nit !== '') {
+                        if ($resolver->existsByNit($nit)) {
+                            throw ValidationException::withMessages([
+                                'nit' => 'Ya existe una empresa con este NIT. Selecciónela en lugar de crear otra.',
+                            ]);
+                        }
+                    }
 
-            $empresa = new Empresa();
-            $empresa->nombre_empresa = $validated['nombre_empresa'];
-            $empresa->nombre_responsable = $validated['nombre_responsable'] ?? null;
-            $empresa->nombre_gerente = $validated['nombre_gerente'] ?? null;
-            $empresa->telefono = $validated['telefono'] ?? null;
-            $empresa->email = $validated['email'] ?? null;
-            $empresa->direccion = $validated['direccion'] ?? null;
-            $empresa->nit = $validated['nit'] ?? null;
-            $empresa->pais = $validated['pais'] ?? null;
-            $empresa->ciudad = $validated['ciudad'] ?? null;
-            $empresa->es_activo = 1;
-            $empresa->save();
+                    if (Empresa::query()->where('nombre_empresa', $validated['nombre_empresa'])->exists()) {
+                        throw ValidationException::withMessages([
+                            'nombre_empresa' => 'Ya existe una empresa con ese nombre.',
+                        ]);
+                    }
+
+                    $empresa = new Empresa();
+                    $empresa->nombre_empresa = $validated['nombre_empresa'];
+                    $empresa->nombre_responsable = $validated['nombre_responsable'] ?? null;
+                    $empresa->nombre_gerente = $validated['nombre_gerente'] ?? null;
+                    $empresa->telefono = $validated['telefono'] ?? null;
+                    $empresa->email = $validated['email'] ?? null;
+                    $empresa->direccion = $validated['direccion'] ?? null;
+                    $empresa->nit = $validated['nit'] ?? null;
+                    $empresa->pais = $validated['pais'] ?? null;
+                    $empresa->ciudad = $validated['ciudad'] ?? null;
+                    $empresa->es_activo = 1;
+                    $empresa->save();
+
+                    return $empresa;
+                })
+            );
 
             return response()->json([
                 'success' => true,
@@ -630,7 +731,7 @@ class ContratoController extends Controller
             $empresa->paises_representante = ' ';
             $empresa->empresa_representante = ' ';
             $empresa->marcas_representante = ' ';
-            $empresa->pendiente_llenado = ' ';
+            $empresa->pendiente_llenado = EmpresaNitResolver::provisionalMarker();
             $empresa->pais = '123'; // Valor por defecto (sistema antiguo)
             $empresa->ciudad = '540852'; // Valor por defecto (sistema antiguo)
             $empresa->usuario = $usuario;
@@ -1453,7 +1554,15 @@ class ContratoController extends Controller
     /**
      * Guardar el llenado del contrato (replicando lógica del sistema antiguo)
      */
-    public function guardarLlenado($id, Request $request)
+    public function guardarLlenado($id, Request $request, EmpresaNitResolver $resolver)
+    {
+        return $resolver->withNitLock(
+            (string) $request->input('nit', ''),
+            fn () => $this->guardarLlenadoConNit($id, $request, $resolver)
+        );
+    }
+
+    private function guardarLlenadoConNit($id, Request $request, EmpresaNitResolver $resolver)
     {
         try {
             $idFeria = (int) Contrato::query()->whereKey($id)->value('id_feria');
@@ -1489,9 +1598,10 @@ class ContratoController extends Controller
 
             DB::beginTransaction();
 
-            // 1. Obtener contrato y empresa
-            $contrato = Contrato::findOrFail($id);
-            $empresa = Empresa::findOrFail($contrato->id_empresa);
+            // 1. Obtener contrato y resolver la ficha destino según el NIT confirmado.
+            $contrato = Contrato::query()->lockForUpdate()->findOrFail($id);
+            $resolucionEmpresa = $resolver->resolveForContract($contrato, $request);
+            $empresa = $resolucionEmpresa['empresa'];
 
             $metrajeTotal = (float) $contrato->metraje_total;
             if (!is_finite($metrajeTotal) || $metrajeTotal <= 0) {
@@ -1732,6 +1842,7 @@ class ContratoController extends Controller
                 ]);
             }
 
+            $resolver->deleteProvisionalIfOrphaned($resolucionEmpresa['empresa_anterior_id']);
             DB::commit();
 
             event(new \App\Events\ActualizacionDatos([
