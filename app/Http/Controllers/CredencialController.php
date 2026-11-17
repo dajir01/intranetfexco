@@ -3171,7 +3171,7 @@ class CredencialController extends Controller
                 },
             ],
             'usuario' => ['nullable', 'string', 'max:50'],
-            'pass' => ['nullable', 'string', 'max:255'],
+            'pass' => ['nullable', 'string', 'regex:/^(?=.*[a-z])(?=.*\d)[a-z\d]{7}$/'],
             'tipo_credencial' => ['required', 'string', 'max:100'],
             'tipo_credenciales' => ['required', 'integer', 'in:0,1'],
             'cantidad_credenciales' => ['required', 'integer', 'min:1'],
@@ -3456,6 +3456,15 @@ class CredencialController extends Controller
         return $usuario;
     }
 
+    private function generarContrasenaEmpresa(): string
+    {
+        do {
+            $password = Str::lower(Str::random(7));
+        } while (! preg_match('/[a-z]/', $password) || ! preg_match('/[0-9]/', $password));
+
+        return $password;
+    }
+
     private function crearEmpresaDesdeCredenciales(array $validated, ?int $usuarioId): Empresa
     {
         $nombre = trim($validated['nombre_empresa']);
@@ -3494,7 +3503,7 @@ class CredencialController extends Controller
         $empresa->pais = '123';
         $empresa->ciudad = '540852';
         $empresa->usuario = $usuario;
-        $empresa->pass = ($validated['pass'] ?? null) ?: Str::random(32);
+        $empresa->pass = ($validated['pass'] ?? null) ?: $this->generarContrasenaEmpresa();
         $empresa->id_usuario_creacion = $usuarioId;
         $empresa->fecha_creacion = now();
         $empresa->fecha_actualizacion_empresa = now();

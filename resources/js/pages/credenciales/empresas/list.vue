@@ -200,10 +200,16 @@ const limpiarFormularioAgregar = () => {
 }
 
 const generarPass = () => {
-  const caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*+-'
-  const aleatorios = crypto.getRandomValues(new Uint8Array(24))
+  const caracteres = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let password = ''
 
-  return Array.from(aleatorios, valor => caracteres[valor % caracteres.length]).join('')
+  do {
+    const aleatorios = crypto.getRandomValues(new Uint8Array(7))
+
+    password = Array.from(aleatorios, valor => caracteres[valor % caracteres.length]).join('')
+  } while (!/[a-z]/.test(password) || !/\d/.test(password))
+
+  return password
 }
 
 const generarUsuario = nombre => {

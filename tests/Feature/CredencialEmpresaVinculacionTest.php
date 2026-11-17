@@ -48,6 +48,40 @@ class CredencialEmpresaVinculacionTest extends TestCase
         Schema::create('empresas', function (Blueprint $table): void {
             $table->increments('id_empresa');
             $table->string('nombre_empresa');
+            $table->string('telefono')->nullable();
+            $table->string('fax')->nullable();
+            $table->string('email')->nullable();
+            $table->string('direccion')->nullable();
+            $table->string('nit')->nullable();
+            $table->string('nombre_responsable')->nullable();
+            $table->string('nombre_gerente')->nullable();
+            $table->integer('categoria')->nullable();
+            $table->integer('rubro')->nullable();
+            $table->string('desc_producto')->nullable();
+            $table->string('ci_gerente')->nullable();
+            $table->string('exp_ci_gerente')->nullable();
+            $table->string('fono_gerente')->nullable();
+            $table->string('cargo_gerente')->nullable();
+            $table->string('ci_responsable')->nullable();
+            $table->string('exp_ci_responsable')->nullable();
+            $table->string('telefono_responsable')->nullable();
+            $table->string('email_representante')->nullable();
+            $table->integer('id_tipo_representante')->nullable();
+            $table->string('otro_rubro')->nullable();
+            $table->string('paises_representante')->nullable();
+            $table->string('empresa_representante')->nullable();
+            $table->string('marcas_representante')->nullable();
+            $table->string('pendiente_llenado')->nullable();
+            $table->string('pais')->nullable();
+            $table->string('ciudad')->nullable();
+            $table->string('usuario')->nullable();
+            $table->string('pass')->nullable();
+            $table->unsignedInteger('id_usuario_creacion')->nullable();
+            $table->timestamp('fecha_creacion')->nullable();
+            $table->timestamp('fecha_actualizacion_empresa')->nullable();
+            $table->string('remember_token')->nullable();
+            $table->boolean('es_activo')->nullable();
+            $table->timestamps();
         });
 
         Schema::create('credenciales', function (Blueprint $table): void {
@@ -157,17 +191,63 @@ class CredencialEmpresaVinculacionTest extends TestCase
             'nombre_empresa' => 'Empresa de prueba',
         ]);
 
-        $response = (new CredencialController)->storeEmpresa(Request::create('/', 'POST', [
-            'id_feria' => 19,
-            'id_empresa' => 7,
-            'nombre_empresa' => 'Empresa de prueba',
-            'tipo_credencial' => 'Expositor',
-            'tipo_credenciales' => 0,
-            'cantidad_credenciales' => 2,
-        ]));
+        $response = (new CredencialController)->storeEmpresa(
+            Request::create('/', 'POST', [
+                'id_feria' => 19,
+                'id_empresa' => 7,
+                'nombre_empresa' => 'Empresa de prueba',
+                'tipo_credencial' => 'Expositor',
+                'tipo_credenciales' => 0,
+                'cantidad_credenciales' => 2,
+            ]),
+            new \App\Services\EmpresaNitResolver,
+        );
 
         $this->assertSame(201, $response->getStatusCode());
         $this->assertFalse((bool) DB::table('empresa_evento_credenciales')->value('visible_en_plataforma'));
+    }
+
+    public function test_new_company_password_fallback_is_seven_lowercase_letters_and_digits(): void
+    {
+        DB::table('eventos')->insert([
+            'id_feria' => 19,
+            'tipo_credenciales' => 'Expositor',
+        ]);
+
+        $response = (new CredencialController)->storeEmpresa(Request::create('/', 'POST', [
+            'id_feria' => 19,
+            'nombre_empresa' => 'Empresa nueva',
+            'tipo_credencial' => 'Expositor',
+            'tipo_credenciales' => 0,
+            'cantidad_credenciales' => 2,
+        ]), new \App\Services\EmpresaNitResolver);
+
+        $password = (string) DB::table('empresas')->value('pass');
+
+        $this->assertSame(201, $response->getStatusCode());
+        $this->assertMatchesRegularExpression('/^(?=.*[a-z])(?=.*[0-9])[a-z0-9]{7}$/', $password);
+    }
+
+    public function test_new_company_rejects_passwords_outside_the_required_format(): void
+    {
+        DB::table('eventos')->insert([
+            'id_feria' => 19,
+            'tipo_credenciales' => 'Expositor',
+        ]);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+
+        (new CredencialController)->storeEmpresa(
+            Request::create('/', 'POST', [
+                'id_feria' => 19,
+                'nombre_empresa' => 'Empresa nueva',
+                'pass' => str_repeat('A', 24),
+                'tipo_credencial' => 'Expositor',
+                'tipo_credenciales' => 0,
+                'cantidad_credenciales' => 2,
+            ]),
+            new \App\Services\EmpresaNitResolver,
+        );
     }
 
     public function test_visibility_migration_preserves_existing_links_and_hides_future_links(): void
