@@ -111,7 +111,9 @@ class EmpresaNitResolver
             ]);
         }
 
-        [$company, $requiresReview] = $this->selectCandidate($this->companiesForNit($normalizedNit));
+        [$company, $requiresReview] = $this->selectCandidate(
+            $this->companiesForNitPreferringActive($normalizedNit)
+        );
         if ($company === null) {
             return ['encontrada' => false, 'requiere_revision' => false];
         }
@@ -133,6 +135,164 @@ class EmpresaNitResolver
     }
 
     /**
+     * Returns one selectable company per valid NIT. Records with no usable NIT
+     * remain separate because matching them by name alone could merge distinct companies.
+     *
+     * @return array{
+     *     companies: array<int, array<string, mixed>>,
+     *     ambiguous_count: int,
+     *     ambiguous_companies: array<int, array{nit: string, companies: array<int, array<string, mixed>>}>
+     * }
+     */
+    public function canonicalReservationCompanies(): array
+    {
+        $companies = Empresa::query()
+            ->where('es_activo', 1)
+            ->select([
+                'id_empresa',
+                'nombre_empresa',
+                'nombre_responsable',
+                'nombre_gerente',
+                'nit',
+                'fecha_creacion',
+                'fecha_actualizacion_empresa',
+            ])
+            ->orderBy('nombre_empresa')
+            ->orderBy('id_empresa')
+            ->get();
+
+        $groups = $companies->groupBy(function (Empresa $company): string {
+            $nit = NitNormalizer::normalize((string) $company->nit);
+
+            return strlen($nit) >= 5
+                ? 'nit:'.$nit
+                : 'company:'.$company->id_empresa;
+        });
+
+        $canonical = [];
+        $ambiguousCompanies = [];
+
+        foreach ($groups as $group) {
+            [$company, $requiresReview] = $this->selectCandidate($group);
+            if ($requiresReview) {
+                $ambiguousCompanies[] = [
+                    'nit' => NitNormalizer::normalize((string) $group->first()->nit),
+                    'companies' => $group->sortBy('id_empresa')
+                        ->values()
+                        ->map(static fn (Empresa $candidate): array => [
+                            'id_empresa' => (int) $candidate->id_empresa,
+                            'nombre_empresa' => $candidate->nombre_empresa,
+                            'nit' => $candidate->nit,
+                            'fecha_actualizacion_empresa' => $candidate->fecha_actualizacion_empresa,
+                            'fecha_creacion' => $candidate->fecha_creacion,
+                        ])
+                        ->all(),
+                ];
+
+                continue;
+            }
+
+            $canonical[] = [
+                'id_empresa' => (int) $company->id_empresa,
+                'nombre_empresa' => $company->nombre_empresa,
+                'nombre_responsable' => $company->nombre_responsable,
+                'nombre_gerente' => $company->nombre_gerente,
+                'nit' => $company->nit,
+            ];
+        }
+
+        usort(
+            $canonical,
+            static fn (array $left, array $right): int => strcasecmp(
+                (string) $left['nombre_empresa'],
+                (string) $right['nombre_empresa']
+            ) ?: ($left['id_empresa'] <=> $right['id_empresa'])
+        );
+
+        return [
+            'companies' => $canonical,
+            'ambiguous_count' => count($ambiguousCompanies),
+            'ambiguous_companies' => $ambiguousCompanies,
+        ];
+    }
+
+    /**
+     * Re-resolves an active company ID to the canonical active record for its NIT.
+     */
+    public function canonicalReservationCompanyId(int $companyId): int
+    {
+        $company = Empresa::query()
+            ->where('es_activo', 1)
+            ->lockForUpdate()
+            ->find($companyId, ['id_empresa', 'nit']);
+
+        if (! $company) {
+            throw ValidationException::withMessages([
+                'id_empresa' => 'La empresa seleccionada no existe o está inactiva. Actualice la lista.',
+            ]);
+        }
+
+        $nit = NitNormalizer::normalize((string) $company->nit);
+        if (strlen($nit) < 5) {
+            return (int) $company->id_empresa;
+        }
+
+        [$candidate, $requiresReview] = $this->selectCandidate(
+            $this->companiesForNit($nit, lockForUpdate: true, activeOnly: true)
+        );
+
+        if ($requiresReview || $candidate === null) {
+            throw ValidationException::withMessages([
+                'id_empresa' => 'Las fichas con el NIT de esta empresa requieren revisión antes de reservar.',
+            ]);
+        }
+
+        return (int) $candidate->id_empresa;
+    }
+
+    /**
+     * Resolves a typed company name only when it identifies one active company
+     * or duplicate records that share one valid NIT.
+     */
+    public function reservationCompanyIdByName(string $name): ?int
+    {
+        $matches = Empresa::query()
+            ->where('nombre_empresa', $name)
+            ->get(['id_empresa', 'nit', 'es_activo']);
+
+        if ($matches->isEmpty()) {
+            return null;
+        }
+
+        $active = $matches->filter(
+            static fn (Empresa $company): bool => (int) $company->es_activo === 1
+        )->values();
+
+        if ($active->isEmpty()) {
+            throw ValidationException::withMessages([
+                'empresa' => 'La empresa con ese nombre está inactiva. Seleccione una empresa activa o solicite su revisión.',
+            ]);
+        }
+
+        if ($active->count() === 1) {
+            return $this->canonicalReservationCompanyId((int) $active->first()->id_empresa);
+        }
+
+        $normalizedNits = $active
+            ->map(static fn (Empresa $company): string => NitNormalizer::normalize((string) $company->nit))
+            ->unique()
+            ->values();
+
+        if ($normalizedNits->count() !== 1 || strlen((string) $normalizedNits->first()) < 5) {
+            throw ValidationException::withMessages([
+                'empresa' => 'Hay varias empresas con ese nombre. Seleccione una de la lista para usar su ficha correcta.',
+            ]);
+        }
+
+        return $this->canonicalReservationCompanyId((int) $active->first()->id_empresa);
+    }
+
+    /**
      * Resolves the selected NIT and switches only the contract being filled.
      * The caller must already be inside a database transaction.
      *
@@ -145,7 +305,7 @@ class EmpresaNitResolver
         $selectedCompanyId = $request->input('id_empresa_destino');
 
         [$candidate, $requiresReview] = $this->selectCandidate(
-            $this->companiesForNit($nit, lockForUpdate: true)
+            $this->companiesForNitPreferringActive($nit, lockForUpdate: true)
         );
 
         if ($candidate === null) {
@@ -245,32 +405,62 @@ class EmpresaNitResolver
             'company' => $company,
             'updated' => $this->dateRank($company->fecha_actualizacion_empresa),
             'created' => $this->dateRank($company->fecha_creacion),
-        ])->sort(function (array $left, array $right): int {
-            return ($right['updated'] <=> $left['updated'])
-                ?: ($right['created'] <=> $left['created']);
+        ])->map(function (array $candidate): array {
+            $updated = $candidate['updated'];
+            $created = $candidate['created'];
+
+            if ($updated !== null && $created !== null && $updated < $created) {
+                $updated = null;
+            }
+
+            $candidate['effective'] = $updated ?? $created;
+
+            return $candidate;
+        })->sort(function (array $left, array $right): int {
+            return $right['effective'] <=> $left['effective'];
         })->values();
 
         $first = $ranked->first();
         $second = $ranked->get(1);
         $requiresReview = $second !== null
-            && $first['updated'] === $second['updated']
-            && $first['created'] === $second['created'];
+            && $first['effective'] === $second['effective'];
 
         return [$first['company'], $requiresReview];
     }
 
-    private function companiesForNit(string $normalizedNit, bool $lockForUpdate = false): Collection
+    private function companiesForNit(
+        string $normalizedNit,
+        bool $lockForUpdate = false,
+        bool $activeOnly = false
+    ): Collection
     {
         $query = Empresa::query()
             ->whereRaw(self::NORMALIZED_NIT_SQL.' = ?', [$normalizedNit])
             ->select(self::CANDIDATE_FIELDS)
             ->orderBy('id_empresa');
 
+        if ($activeOnly) {
+            $query->where('es_activo', 1);
+        }
+
         if ($lockForUpdate) {
             $query->lockForUpdate();
         }
 
         return $query->get();
+    }
+
+    private function companiesForNitPreferringActive(string $normalizedNit, bool $lockForUpdate = false): Collection
+    {
+        $activeCompanies = $this->companiesForNit(
+            $normalizedNit,
+            lockForUpdate: $lockForUpdate,
+            activeOnly: true
+        );
+
+        return $activeCompanies->isNotEmpty()
+            ? $activeCompanies
+            : $this->companiesForNit($normalizedNit, lockForUpdate: $lockForUpdate);
     }
 
     private function dateRank(mixed $value): ?int

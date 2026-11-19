@@ -29,6 +29,7 @@ const modoCambio = ref(null)
 // Empresa: selección (reutiliza lógica de reserva.vue)
 const empresaActual = ref(null)
 const empresas = ref([])
+const gruposEmpresasRevision = ref([])
 const loadingEmpresas = ref(false)
 const empresaSeleccionada = ref(null)
 // ID seleccionado robusto (acepta número, string numérica u objeto con id)
@@ -197,8 +198,12 @@ const buscarEmpresas = async () => {
     const resp = await fetch(`/contratos/empresas`)
     const json = await resp.json()
     empresas.value = Array.isArray(json.data) ? json.data : []
+    gruposEmpresasRevision.value = Array.isArray(json.ambiguous_companies)
+      ? json.ambiguous_companies
+      : []
   } catch (e) {
     empresas.value = []
+    gruposEmpresasRevision.value = []
   } finally {
     loadingEmpresas.value = false
   }
@@ -490,6 +495,7 @@ const volverAlListado = () => {
                 <VListItem v-bind="props" :title="item.raw.nombre_empresa">
                   <template #subtitle>
                     <div class="text-caption">
+                      <span v-if="item.raw.nit">NIT: {{ item.raw.nit }}</span>
                       <span v-if="item.raw.nombre_responsable">Responsable: {{ item.raw.nombre_responsable }}</span>
                       <span v-if="item.raw.nombre_gerente" class="ml-2">| Gerente: {{ item.raw.nombre_gerente }}</span>
                     </div>
@@ -497,6 +503,34 @@ const volverAlListado = () => {
                 </VListItem>
               </template>
             </VCombobox>
+            <VAlert
+              v-if="gruposEmpresasRevision.length > 0"
+              type="warning"
+              variant="tonal"
+            >
+              <p class="mb-2">
+                Se omitieron {{ gruposEmpresasRevision.length }} grupos de empresas duplicadas por NIT porque tienen fechas efectivas empatadas o no válidas. Revise las fichas antes de cambiar la empresa:
+              </p>
+              <div
+                v-for="grupo in gruposEmpresasRevision"
+                :key="grupo.nit"
+                class="mb-3"
+              >
+                <strong>NIT normalizado: {{ grupo.nit }}</strong>
+                <ul class="pl-5">
+                  <li
+                    v-for="empresa in grupo.companies"
+                    :key="empresa.id_empresa"
+                  >
+                    ID {{ empresa.id_empresa }} — {{ empresa.nombre_empresa }} — NIT: {{ empresa.nit || 'vacío' }}
+                    <div class="text-caption">
+                      Actualización: {{ empresa.fecha_actualizacion_empresa || 'sin fecha' }}
+                      | Creación: {{ empresa.fecha_creacion || 'sin fecha' }}
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </VAlert>
 
             <!-- Indicador de empresa nueva o existente -->
             <VAlert v-if="empresaSeleccionada" :type="esEmpresaNueva ? 'info' : 'success'" variant="tonal">

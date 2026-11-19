@@ -63,6 +63,7 @@ class EmpresaNitResolverTest extends TestCase
             $table->dateTime('fecha_creacion')->nullable();
             $table->dateTime('fecha_actualizacion_empresa')->nullable();
             $table->string('pendiente_llenado')->nullable();
+            $table->boolean('es_activo')->default(true);
             $table->timestamps();
         });
 
@@ -103,6 +104,17 @@ class EmpresaNitResolverTest extends TestCase
         $this->assertArrayNotHasKey('cantidad_contratos', $result);
     }
 
+    public function test_lookup_prefers_an_active_company_over_a_newer_inactive_duplicate(): void
+    {
+        $activeId = $this->createCompany('Ficha activa', '123456', '2025-01-01 10:00:00', '2025-02-01 10:00:00');
+        $inactiveId = $this->createCompany('Ficha inactiva', '123-456', '2025-03-01 10:00:00', '2025-04-01 10:00:00');
+        DB::table('empresas')->where('id_empresa', $inactiveId)->update(['es_activo' => false]);
+
+        $result = (new EmpresaNitResolver())->lookup('123456');
+
+        $this->assertSame($activeId, $result['empresa']['id_empresa']);
+    }
+
     public function test_lookup_requires_review_for_equal_date_candidates(): void
     {
         $date = '2025-01-01 10:00:00';
@@ -133,6 +145,84 @@ class EmpresaNitResolverTest extends TestCase
 
         $this->assertSame($newerId, $result['empresa']['id_empresa']);
         $this->assertNotSame($olderId, $result['empresa']['id_empresa']);
+    }
+
+    public function test_lookup_compares_creation_date_when_update_is_invalid_or_precedes_creation(): void
+    {
+        $this->createCompany('Ficha antigua', '123456', '2025-01-01 10:00:00', '2024-12-01 10:00:00');
+        $newerId = $this->createCompany('Ficha reciente', '123456', '2025-06-01 10:00:00', '2035-01-01 10:00:00');
+
+        $result = (new EmpresaNitResolver())->lookup('123456');
+
+        $this->assertSame($newerId, $result['empresa']['id_empresa']);
+    }
+
+    public function test_reservation_company_list_collapses_matching_nits_to_the_latest_record(): void
+    {
+        $olderId = $this->createCompany('Autogroup', '123-456', '2025-01-01 10:00:00', '2025-01-01 10:00:00');
+        $newerId = $this->createCompany('Autogroup actualizado', '123456', '2025-02-01 10:00:00', '2025-05-01 10:00:00');
+        $withoutNitId = $this->createCompany('Empresa sin NIT', '', '2025-03-01 10:00:00', '2025-03-01 10:00:00');
+        $withoutNitDuplicateId = $this->createCompany('Empresa sin NIT', '', '2025-04-01 10:00:00', '2025-04-01 10:00:00');
+        $inactiveId = $this->createCompany('Ficha inactiva', '123456', '2025-06-01 10:00:00', '2025-07-01 10:00:00');
+        DB::table('empresas')->where('id_empresa', $inactiveId)->update(['es_activo' => false]);
+
+        $result = (new EmpresaNitResolver())->canonicalReservationCompanies();
+
+        $this->assertSame(0, $result['ambiguous_count']);
+        $this->assertCount(3, $result['companies']);
+        $this->assertSame(
+            [$newerId, $withoutNitId, $withoutNitDuplicateId],
+            array_column($result['companies'], 'id_empresa')
+        );
+        $this->assertNotContains($olderId, array_column($result['companies'], 'id_empresa'));
+        $this->assertNotContains($inactiveId, array_column($result['companies'], 'id_empresa'));
+    }
+
+    public function test_reservation_company_list_omits_tied_duplicate_nits_for_review(): void
+    {
+        $date = '2025-01-01 10:00:00';
+        $firstId = $this->createCompany('Ficha uno', '123456', $date, $date);
+        $secondId = $this->createCompany('Ficha dos', '123-456', $date, $date);
+
+        $result = (new EmpresaNitResolver())->canonicalReservationCompanies();
+
+        $this->assertSame(1, $result['ambiguous_count']);
+        $this->assertSame([], $result['companies']);
+        $this->assertSame('123456', $result['ambiguous_companies'][0]['nit']);
+        $this->assertSame(
+            [$firstId, $secondId],
+            array_column($result['ambiguous_companies'][0]['companies'], 'id_empresa')
+        );
+        $this->assertSame(
+            [$date, $date],
+            array_column($result['ambiguous_companies'][0]['companies'], 'fecha_actualizacion_empresa')
+        );
+    }
+
+    public function test_reservation_re_resolves_a_duplicate_id_to_its_canonical_record(): void
+    {
+        $olderId = $this->createCompany('Ficha antigua', '123456', '2025-01-01 10:00:00', '2025-01-01 10:00:00');
+        $newerId = $this->createCompany('Ficha reciente', '123-456', '2025-02-01 10:00:00', '2025-05-01 10:00:00');
+
+        $this->assertSame($newerId, (new EmpresaNitResolver())->canonicalReservationCompanyId($olderId));
+    }
+
+    public function test_typed_duplicate_name_uses_same_nit_canonical_record_and_rejects_different_nits(): void
+    {
+        $this->createCompany('Autogroup', '123456', '2025-01-01 10:00:00', '2025-01-01 10:00:00');
+        $newerId = $this->createCompany('Autogroup', '123-456', '2025-02-01 10:00:00', '2025-05-01 10:00:00');
+
+        $resolver = new EmpresaNitResolver();
+        $this->assertSame($newerId, $resolver->reservationCompanyIdByName('Autogroup'));
+
+        $this->createCompany('Autogroup', '789012', '2025-03-01 10:00:00', '2025-04-01 10:00:00');
+
+        try {
+            $resolver->reservationCompanyIdByName('Autogroup');
+            $this->fail('Debe exigir selección explícita si el nombre identifica NIT distintos.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('empresa', $exception->errors());
+        }
     }
 
     public function test_contract_switches_only_to_the_confirmed_company_id(): void
@@ -266,6 +356,7 @@ class EmpresaNitResolverTest extends TestCase
             'fecha_creacion' => $createdAt,
             'fecha_actualizacion_empresa' => $updatedAt,
             'pendiente_llenado' => '',
+            'es_activo' => true,
             'created_at' => $createdAt,
             'updated_at' => $updatedAt,
         ], 'id_empresa');

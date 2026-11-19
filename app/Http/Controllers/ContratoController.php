@@ -576,17 +576,16 @@ class ContratoController extends Controller
     /**
      * Obtener todas las empresas para el select
      */
-    public function getEmpresas()
+    public function getEmpresas(EmpresaNitResolver $resolver)
     {
         try {
-            $empresas = Empresa::select('id_empresa', 'nombre_empresa', 'nombre_responsable', 'nombre_gerente')
-                ->where('es_activo', 1)
-                ->orderBy('nombre_empresa', 'asc')
-                ->get();
+            $seleccion = $resolver->canonicalReservationCompanies();
 
             return response()->json([
                 'success' => true,
-                'data' => $empresas
+                'data' => $seleccion['companies'],
+                'ambiguous_count' => $seleccion['ambiguous_count'],
+                'ambiguous_companies' => $seleccion['ambiguous_companies'],
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -688,13 +687,12 @@ class ContratoController extends Controller
      * Crear empresa automáticamente desde check_empresa
      * Replica la lógica del sistema antiguo
      */
-    private function crearEmpresaAutomatica($nombreEmpresa, $usuarioId)
+    private function crearEmpresaAutomatica($nombreEmpresa, $usuarioId, EmpresaNitResolver $resolver)
     {
         try {
-            // Verificar si ya existe
-            $empresaExistente = Empresa::where('nombre_empresa', $nombreEmpresa)->first();
-            if ($empresaExistente) {
-                return $empresaExistente->id_empresa;
+            $empresaExistenteId = $resolver->reservationCompanyIdByName((string) $nombreEmpresa);
+            if ($empresaExistenteId !== null) {
+                return $empresaExistenteId;
             }
 
             // Generar usuario a partir del nombre de la empresa
@@ -744,6 +742,8 @@ class ContratoController extends Controller
             $empresa->save();
 
             return $empresa->id_empresa;
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             throw new \Exception('Error al crear empresa automática: ' . $e->getMessage());
         }
@@ -754,23 +754,36 @@ class ContratoController extends Controller
      * Si check_empresa = 'A' → es empresa existente (usar id_empresa)
      * Si check_empresa != 'A' → es empresa nueva (crear automáticamente)
      */
-    public function resolverEmpresa($checkEmpresa, $idEmpresa, $usuarioId)
+    public function resolverEmpresa($checkEmpresa, $idEmpresa, $usuarioId, EmpresaNitResolver $resolver)
     {
         // Normalizar valor entrante desde el frontend (puede llegar como string u objeto)
         // 1) Si es string y marca empresa existente
         if (is_string($checkEmpresa) && strtoupper($checkEmpresa) === 'A') {
-            return $idEmpresa;
+            if (! is_numeric($idEmpresa)) {
+                throw ValidationException::withMessages([
+                    'id_empresa' => 'Seleccione una empresa válida de la lista.',
+                ]);
+            }
+
+            return $resolver->canonicalReservationCompanyId((int) $idEmpresa);
         }
 
         // 2) Si llega como arreglo/objeto (por ejemplo, item completo de VCombobox)
         if (is_array($checkEmpresa)) {
+            $empresaIdSeleccionada = $checkEmpresa['id_empresa'] ?? $checkEmpresa['id'] ?? null;
+            if (is_numeric($empresaIdSeleccionada)) {
+                return $resolver->canonicalReservationCompanyId((int) $empresaIdSeleccionada);
+            }
+
             $nombre = $checkEmpresa['nombre_empresa']
                 ?? $checkEmpresa['label']
                 ?? $checkEmpresa['text']
                 ?? null;
 
             if (is_string($nombre) && $nombre !== '') {
-                return $this->crearEmpresaAutomatica($nombre, $usuarioId);
+                $empresaExistenteId = $resolver->reservationCompanyIdByName($nombre);
+
+                return $empresaExistenteId ?? $this->crearEmpresaAutomatica($nombre, $usuarioId, $resolver);
             }
 
             throw new \InvalidArgumentException('Parámetro check_empresa inválido: se esperaba nombre de empresa.');
@@ -778,7 +791,9 @@ class ContratoController extends Controller
 
         // 3) Si es string distinto de 'A', se asume nombre de nueva empresa
         if (is_string($checkEmpresa)) {
-            return $this->crearEmpresaAutomatica($checkEmpresa, $usuarioId);
+            $empresaExistenteId = $resolver->reservationCompanyIdByName($checkEmpresa);
+
+            return $empresaExistenteId ?? $this->crearEmpresaAutomatica($checkEmpresa, $usuarioId, $resolver);
         }
 
         // 4) Cualquier otro tipo no es válido
@@ -823,7 +838,7 @@ class ContratoController extends Controller
     /**
      * Actualizar únicamente la empresa de un contrato
      */
-    public function actualizarEmpresa($id, Request $request)
+    public function actualizarEmpresa($id, Request $request, EmpresaNitResolver $resolver)
     {
         $request->validate([
             'check_empresa' => 'required',
@@ -834,7 +849,12 @@ class ContratoController extends Controller
             $contrato = Contrato::findOrFail($id);
             // Resolver empresa con la misma lógica que reserva
             $usuarioId = Auth::user()->id_usuario ?? Auth::id();
-            $idEmpresaNueva = $this->resolverEmpresa($request->check_empresa, $request->id_empresa, $usuarioId);
+            $idEmpresaNueva = $this->resolverEmpresa(
+                $request->check_empresa,
+                $request->id_empresa,
+                $usuarioId,
+                $resolver
+            );
 
             if ((int)$contrato->id_empresa === (int)$idEmpresaNueva) {
                 return response()->json([
@@ -866,6 +886,12 @@ class ContratoController extends Controller
                     ]
                 ]
             ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first(),
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -1204,7 +1230,7 @@ class ContratoController extends Controller
      * Guardar nueva reserva de contrato
      * Replica la lógica del sistema antiguo
      */
-    public function guardarReserva(Request $request)
+    public function guardarReserva(Request $request, EmpresaNitResolver $resolver)
     {
         $request->validate([
             'id_feria' => 'required|integer|exists:eventos,id_feria',
@@ -1275,7 +1301,8 @@ class ContratoController extends Controller
             $idEmpresa = $this->resolverEmpresa(
                 $request->check_empresa,
                 $request->id_empresa,
-                $usuarioId
+                $usuarioId,
+                $resolver
             );
 
             $empresa = Empresa::findOrFail($idEmpresa);
